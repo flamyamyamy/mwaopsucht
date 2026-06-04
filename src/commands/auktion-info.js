@@ -44,7 +44,7 @@ export async function execute(interaction) {
 
   const embed = new EmbedBuilder()
     .setColor(0xe6b800)
-    .setTitle(`🏷️ ${amount > 1 ? `${amount}x ` : ""}${name}`)
+    .setTitle(`<:Bookshelf:1512068300864768512> ${amount > 1 ? `${amount}x ` : ""}${name}`)
     .setThumbnail(item.icon ?? null)
     .addFields(
       { name: "Startgebot",    value: `${fmt(a.startBid)} 💰`,            inline: true },
