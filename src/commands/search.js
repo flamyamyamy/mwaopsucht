@@ -90,7 +90,7 @@ export async function execute(interaction) {
   const history = getPriceHistory(query, days);
 
   // ── 3) Item-Icon URL ─────────────────────────────────────────────────────
-  const itemIconUrl = itemMaterial ? getItemIconUrl(itemMaterial) : null;
+  const itemIcon = itemMaterial ? getItemIconUrl(itemMaterial) : null;
 
   // ── 4) Chart generieren ───────────────────────────────────────────────────
   let chartAttachment = null;
@@ -104,7 +104,7 @@ export async function execute(interaction) {
   }
 
   // ── 5) Embed bauen & senden (v2 Components) ───────────────────────────────
-  const embed     = buildEmbed(query, days, stats, history, liveAuctions, fetchError, !!chartAttachment, itemIconUrl);
+  const embed     = buildEmbed(query, days, stats, history, liveAuctions, fetchError, !!chartAttachment, itemIcon);
   const actionRow = buildActionRow(query, days);
 
   const replyOptions = {
@@ -140,7 +140,7 @@ export async function execute(interaction) {
       }
     }
 
-    const newEmbed   = buildEmbed(query, newDays, newStats, newHistory, liveAuctions, fetchError, !!newAttachment, itemIconUrl);
+    const newEmbed   = buildEmbed(query, newDays, newStats, newHistory, liveAuctions, fetchError, !!newAttachment, itemIcon);
     const updateOpts = {
       embeds: [newEmbed],
       components: [buildActionRow(query, newDays)],
@@ -360,15 +360,15 @@ function renderChart(title, history) {
 
 // ── Embed (v2) mit Item-Icon oben rechts ──────────────────────────────────────
 
-function buildEmbed(query, days, stats, history, liveAuctions, fetchError, hasChart, itemIconUrl) {
+function buildEmbed(query, days, stats, history, liveAuctions, fetchError, hasChart, itemIcon) {
   const embed = new EmbedBuilder()
     .setColor(0xe6b800)
     .setTitle(`🛒 ${query}`)
     .setTimestamp();
 
   // ── Thumbnail (Item-Icon oben rechts) ─────────────────────────────────────
-  if (itemIconUrl) {
-    embed.setThumbnail(itemIconUrl);
+  if (itemIcon) {
+    embed.setThumbnail(itemIcon);
   }
 
   if (hasChart) embed.setImage("attachment://preisverlauf.png");
@@ -399,7 +399,7 @@ function buildEmbed(query, days, stats, history, liveAuctions, fetchError, hasCh
   embed.setDescription(
     lines.length > 0
       ? lines.join("\n")
-      : " Noch keine Daten in der DB für dieses Item.\n" +
+      : "⚠️ Noch keine Daten in der DB für dieses Item.\n" +
         "Daten werden gesammelt, sobald das Item im AH erscheint."
   );
 
@@ -467,27 +467,24 @@ function buildActionRow(query, days) {
 
 /**
  * Erstellt eine URL zum Minecraft Item-Icon basierend auf Material.
- * Nutzt mcasset.cloud für direkte Asset-PNGs.
+ * Nutzt mc-api.io für direkte Asset-PNGs.
  * 
- * Material-Namen müssen in Minecraft-Format sein (lowercase_with_underscores).
- * z.B. "DIAMOND" → "diamond", "WOODEN_PICKAXE" → "wooden_pickaxe"
+ * Material-Namen in Minecraft-Format (z.B. NETHERITE_AXE -> netherite_axe)
  */
 function getItemIconUrl(material) {
   if (!material) return null;
   
   // Normalisiere material name
   // Entferne "minecraft:" prefix falls vorhanden
-  let normalized = material.toLowerCase().replace(/minecraft:/, "");
+  let normalized = material.toLowerCase().replace(/^minecraft:/, "");
   
-  // Falls es UPPERCASE_WITH_UNDERSCORES ist, ist es schon ok
-  // Sonst versuchen wir es zu konvertieren
+  // Falls es Spaces hat, ersetze sie mit Unterstrichen
   if (normalized.includes(" ")) {
     normalized = normalized.replace(/ /g, "_");
   }
   
-  // mcasset.cloud gibt es für verschiedene Versionen
-  // Wir nutzen 1.20.1 (aktuell stabil)
-  return `https://mcasset.cloud/1.20.1/items/${normalized}.png`;
+  // mc-api.io Textur URL
+  return `https://img.mc-api.io/${normalized}.png`;
 }
 
 /** Gleichmäßiges Downsampling eines Arrays auf maximal `n` Einträge */
