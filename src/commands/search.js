@@ -159,7 +159,7 @@ export async function execute(interaction) {
 // ── Canvas Chart ──────────────────────────────────────────────────────────────
 
 /**
- * Rendert einen Preisverlauf-Chart.
+ * Rendert einen Preisverlauf-Chart mit intelligenter Skalierung.
  * Dunkler Hintergrund, orangene Linie mit Punkten, Grid, Datum auf X-Achse.
  * Gibt einen PNG-Buffer zurück.
  */
@@ -180,17 +180,51 @@ function renderChart(title, history) {
   const prices  = sampled.map((h) => h.current_bid ?? 0);
   const times   = sampled.map((h) => h.recorded_at * 1000); // ms
 
-  const minP = Math.min(...prices);
-  const maxP = Math.max(...prices);
+  // ── Intelligente Min/Max-Berechnung (Outlier filtern) ───────────────────
+  const sorted = [...prices].sort((a, b) => a - b);
+  const q1Idx = Math.floor(sorted.length * 0.25);
+  const q3Idx = Math.floor(sorted.length * 0.75);
+  const q1 = sorted[q1Idx];
+  const q3 = sorted[q3Idx];
+  const iqr = q3 - q1;
+  
+  // Outlier-Grenzen: Q1 - 1.5*IQR bis Q3 + 1.5*IQR
+  const lowerBound = Math.max(0, q1 - 1.5 * iqr);
+  const upperBound = q3 + 1.5 * iqr;
+  
+  // Min/Max innerhalb der Grenzen
+  let minP = upperBound;
+  let maxP = lowerBound;
+  for (const p of prices) {
+    if (p >= lowerBound && p <= upperBound) {
+      minP = Math.min(minP, p);
+      maxP = Math.max(maxP, p);
+    }
+  }
+  
+  // Fallback wenn zu extreme Daten
+  if (minP >= maxP) {
+    minP = Math.min(...prices);
+    maxP = Math.max(...prices);
+  }
+  
+  // Padding hinzufügen (10% oben und unten)
+  const range = maxP - minP || 1;
+  minP = Math.max(0, minP - range * 0.1);
+  maxP = maxP + range * 0.1;
+
   const minT = times[0];
   const maxT = times[times.length - 1];
 
   const chartW = W - PAD.left - PAD.right;
   const chartH = H - PAD.top  - PAD.bottom;
 
-  // Hilfsfunktionen: Wert → Pixel
+  // Hilfsfunktionen: Wert → Pixel (mit Clamping)
   const xPx = (t) => PAD.left + ((t - minT) / (maxT - minT || 1)) * chartW;
-  const yPx = (p) => PAD.top  + (1 - (p - minP) / (maxP - minP || 1)) * chartH;
+  const yPx = (p) => {
+    const clamped = Math.max(minP, Math.min(maxP, p));
+    return PAD.top + (1 - (clamped - minP) / (maxP - minP)) * chartH;
+  };
 
   // ── Grid ──────────────────────────────────────────────────────────────────
   const gridLines = 5;
@@ -222,15 +256,16 @@ function renderChart(title, history) {
   // ── X-Achsen-Beschriftung (Datum) ─────────────────────────────────────────
   ctx.textAlign    = "center";
   ctx.textBaseline = "top";
-  const xTicks = Math.min(8, sampled.length);
+  ctx.fillStyle    = "#9a9a9a";
+  ctx.font         = "11px sans-serif";
+  
+  const xTicks = Math.min(6, sampled.length);
   for (let i = 0; i < xTicks; i++) {
-    const idx  = Math.round((i / (xTicks - 1)) * (sampled.length - 1));
+    const idx  = Math.round((i / Math.max(1, xTicks - 1)) * (sampled.length - 1));
     const x    = xPx(times[idx]);
-    const date = new Date(times[idx]).toLocaleDateString("de-DE", {
-      day: "2-digit", month: "2-digit",
-    });
-    ctx.fillStyle = "#9a9a9a";
-    ctx.fillText(date, x, H - PAD.bottom + 8);
+    const date = new Date(times[idx]);
+    const dateStr = `${date.getDate()}.${String(date.getMonth() + 1).padStart(2, '0')}`;
+    ctx.fillText(dateStr, x, H - PAD.bottom + 12);
   }
 
   // ── X-Achsen-Label ────────────────────────────────────────────────────────
@@ -283,8 +318,9 @@ function renderChart(title, history) {
 
   // ── Linie ─────────────────────────────────────────────────────────────────
   ctx.strokeStyle = "#e6b800";
-  ctx.lineWidth   = 2;
+  ctx.lineWidth   = 2.5;
   ctx.lineJoin    = "round";
+  ctx.lineCap     = "round";
   ctx.beginPath();
   ctx.moveTo(xPx(times[0]), yPx(prices[0]));
   for (let i = 1; i < sampled.length; i++) {
@@ -301,7 +337,7 @@ function renderChart(title, history) {
   }
 
   // ── Legende ───────────────────────────────────────────────────────────────
-  const legendX = W - PAD.right - 140;
+  const legendX = W - PAD.right - 150;
   const legendY = PAD.top + 10;
   ctx.strokeStyle = "#e6b800";
   ctx.lineWidth   = 2;
