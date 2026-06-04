@@ -377,29 +377,29 @@ function buildEmbed(query, days, stats, history, liveAuctions, fetchError, hasCh
   const lines       = [];
 
   if (stats.marketValue != null)
-    lines.push(`⭐ **Marktwert:** ${fmt(stats.marketValue)}$`);
+    lines.push(`<:minecoin:1045876432123456789> **Marktwert:** ${fmt(stats.marketValue)}$`);
   if (stats.lastPrice != null)
-    lines.push(`🔴 **Letzter Preis:** ${fmt(stats.lastPrice)}$`);
+    lines.push(`<:Emerad:1045876432123456789> **Letzter Preis:** ${fmt(stats.lastPrice)}$`);
   if (stats.avg7d != null)
-    lines.push(`🟪 **Ø 7 Tage:** ${fmt(stats.avg7d)}$`);
+    lines.push(`<a:Clock:1045876432123456789> **Ø 7 Tage:** ${fmt(stats.avg7d)}$`);
   if (stats.avg30d != null)
-    lines.push(`🟪 **Ø 30 Tage:** ${fmt(stats.avg30d)}$`);
+    lines.push(`<a:Clock:1045876432123456789> **Ø 30 Tage:** ${fmt(stats.avg30d)}$`);
   if (stats.avgAllTime != null) {
     const minMax = (stats.minPrice != null && stats.maxPrice != null)
       ? `  *(Min: ${fmt(stats.minPrice)}$ — Max: ${fmt(stats.maxPrice)}$)*`
       : "";
-    lines.push(`🔷 **Langzeit-Ø:** ${fmt(stats.avgAllTime)}$${minMax}`);
+    lines.push(`<:Arrow:1045876432123456789> **Langzeit-Ø:** ${fmt(stats.avgAllTime)}$${minMax}`);
   }
 
   lines.push(
-    `ℹ️ **Datensätze:** ${stats.periodCount} (${days === 999 ? "Alle" : `${days} Tage`}) — **${stats.totalCount} gesamt**`
+    `<:Book:1045876432123456789> **Datensätze:** ${stats.periodCount} (${days === 999 ? "Alle" : `${days} Tage`}) — **${stats.totalCount} gesamt**`
   );
-  lines.push(`🔒 **Verlässlichkeit:** ${reliability.label}`);
+  lines.push(`<:Name_Tag:1045876432123456789> **Verlässlichkeit:** ${reliability.label}`);
 
   embed.setDescription(
     lines.length > 0
       ? lines.join("\n")
-      : "⚠️ Noch keine Daten in der DB für dieses Item.\n" +
+      : " Noch keine Daten in der DB für dieses Item.\n" +
         "Daten werden gesammelt, sobald das Item im AH erscheint."
   );
 
