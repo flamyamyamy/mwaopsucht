@@ -110,7 +110,7 @@ export async function execute(interaction) {
     container.addSeparatorComponents(new SeparatorBuilder());
 
     const flatLines = [];
-    if (flat.buyPrice  != null) flatLines.push(`**<:minecoin:1512068363864768602> Kaufpreis**\n${fmt(flat.buyPrice)}$`);
+    if (flat.buyPrice  != null) flatLines.push(`**<:minecoins:1512068363864768602> Kaufpreis**\n${fmt(flat.buyPrice)}$`);
     if (flat.sellPrice != null) flatLines.push(`**<:Redstone:1512068332122017822> Verkaufspreis**\n${fmt(flat.sellPrice)}$`);
     if (flat.avgPrice  != null) flatLines.push(`**<:Arrow:1512067924117159947> Ø Preis**\n${fmt(flat.avgPrice)}$`);
     if (flat.minPrice  != null) flatLines.push(`**<:Chart_Decrease:1512068424994570240> Minimum**\n${fmt(flat.minPrice)}$`);

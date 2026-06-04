@@ -354,23 +354,23 @@ function buildContainer(query, days, stats, liveAuctions, fetchError, hasChart, 
   const lines       = [];
 
   if (stats.marketValue != null)
-    lines.push(`<:minecoin:1045876432123456789> **Marktwert:** ${fmt(stats.marketValue)}$`);
+    lines.push(`<:minecoins:1512068363864768602> **Marktwert:** ${fmt(stats.marketValue)}$`);
   if (stats.lastPrice != null)
-    lines.push(`<:Emerad:1045876432123456789> **Letzter Preis:** ${fmt(stats.lastPrice)}$`);
+    lines.push(`<:Emerad:1512068393061318728> **Letzter Preis:** ${fmt(stats.lastPrice)}$`);
   if (stats.avg7d != null)
-    lines.push(`<a:Clock:1045876432123456789> **Ø 7 Tage:** ${fmt(stats.avg7d)}$`);
+    lines.push(`<a:Clock:1512068072075427841> **Ø 7 Tage:** ${fmt(stats.avg7d)}$`);
   if (stats.avg30d != null)
-    lines.push(`<a:Clock:1045876432123456789> **Ø 30 Tage:** ${fmt(stats.avg30d)}$`);
+    lines.push(`<a:Clock:1512068072075427841> **Ø 30 Tage:** ${fmt(stats.avg30d)}$`);
   if (stats.avgAllTime != null) {
     const minMax = (stats.minPrice != null && stats.maxPrice != null)
       ? `  *(Min: ${fmt(stats.minPrice)}$ — Max: ${fmt(stats.maxPrice)}$)*`
       : "";
-    lines.push(`<:Arrow:1045876432123456789> **Langzeit-Ø:** ${fmt(stats.avgAllTime)}$${minMax}`);
+    lines.push(`<:Arrow:1512067924117159947> **Langzeit-Ø:** ${fmt(stats.avgAllTime)}$${minMax}`);
   }
   lines.push(
-    `<:Book:1045876432123456789> **Datensätze:** ${stats.periodCount} (${days === 999 ? "Alle" : `${days} Tage`}) — **${stats.totalCount} gesamt**`
+    `<:Book:1512074541638226021> **Datensätze:** ${stats.periodCount} (${days === 999 ? "Alle" : `${days} Tage`}) — **${stats.totalCount} gesamt**`
   );
-  lines.push(`<:Name_Tag:1045876432123456789> **Verlässlichkeit:** ${reliability.label}`);
+  lines.push(`<:Name_Tag:1512068432123456789> **Verlässlichkeit:** ${reliability.label}`);
 
   const statsContent = lines.length > 0
     ? `# 🛒 ${query}\n\n${lines.join("\n")}`

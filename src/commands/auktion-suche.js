@@ -24,7 +24,7 @@ export const data = new SlashCommandBuilder()
   );
 
 const SORT_LABELS = {
-  asc:  "<:minecoin:1512068363864768602> Günstigste zuerst",
+  asc:  "<:minecoins:1512068363864768602> Günstigste zuerst",
   desc: "<:Emerald:1512068393061318728> Teuerste zuerst",
   soon: "<a:Clock:1512068072075427841> Endet bald",
   bids: "<:Fire_Charge:1512068044271386694> Meiste Gebote",
