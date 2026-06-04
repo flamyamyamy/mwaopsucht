@@ -55,13 +55,15 @@ function parseOrders(material, raw) {
 }
 
 /**
- * Returns a URL to the Minecraft item icon via mc-heads or a fallback CDN.
- * Using minecraft-ids.grahamedgecombe.com image assets as fallback.
+ * Returns a URL to the Minecraft block texture via mcasset.cloud.
+ * Material names in Minecraft format (e.g., AMETHYST_SHARD -> amethyst_shard)
  */
 function itemIconUrl(material) {
   // Normalize: AMETHYST_SHARD -> amethyst_shard
   const name = material.toLowerCase().replace(/^minecraft:/, "");
-  return `https://mc-heads.net/head/${encodeURIComponent(name)}/64`;
+  
+  // mcasset.cloud provides direct PNG links to Minecraft block/item textures
+  return `https://mcasset.cloud/1.20.1/items/${name}.png`;
 }
 
 export async function execute(interaction) {
