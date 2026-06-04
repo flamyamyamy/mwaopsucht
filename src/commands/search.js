@@ -16,7 +16,8 @@ import {
   saveAuctions,
   searchItems,
   getItemStats,
-  getMarketHistory,
+  getPriceHistory,
+  getCandleHistory,
   countItems,
   countSnapshots,
 } from "../utils/db.js";
@@ -92,8 +93,8 @@ export async function execute(interaction) {
   }
 
   // ── 2) DB-Statistiken ────────────────────────────────────────────────────
-const stats = getItemStats(query, days);
-const history = getMarketHistory(query, days);
+  const stats = getItemStats(query, days);
+  const history = getCandleHistory(query, days);
 
   // ── 3) Item-Icon URL ─────────────────────────────────────────────────────
   const itemIcon = itemMaterial ? getItemIconUrl(itemMaterial) : null;
@@ -135,7 +136,7 @@ const history = getMarketHistory(query, days);
     await i.deferUpdate();
 
     const newStats   = getItemStats(query, newDays);
-    const newHistory = getPriceHistory(query, newDays);
+    const newHistory = getCandleHistory(query, newDays);
 
     let newAttachment = null;
     if (newHistory.length >= 2) {
@@ -189,21 +190,21 @@ function renderChart(title, history) {
   ctx.fillStyle = "#0f172a";
   ctx.fillRect(0, 0, W, H);
 
-const chartW = W - PAD.left - PAD.right;
-const chartH = H - PAD.top - PAD.bottom;
+  const chartW = W - PAD.left - PAD.right;
+  const chartH = H - PAD.top - PAD.bottom;
 
-const candles = history.slice(-40);
+  const candles = history.slice(-40);
 
-const max = Math.max(...candles.map(c => c.high));
-const min = Math.min(...candles.map(c => c.low));
-const range = max - min || 1;
+  const max = Math.max(...candles.map(c => c.high));
+  const min = Math.min(...candles.map(c => c.low));
+  const range = max - min || 1;
 
-const xStep = chartW / candles.length; // ← nur hier!
+  const xStep = chartW / candles.length; // ← nur hier!
 
-const x = (i) => PAD.left + i * xStep;
+  const x = (i) => PAD.left + i * xStep;
 
-const y = (v) =>
-  PAD.top + (1 - (v - min) / range) * chartH;
+  const y = (v) =>
+    PAD.top + (1 - (v - min) / range) * chartH;
 
   // GRID
   ctx.strokeStyle = "#1f2937";
@@ -266,13 +267,13 @@ const y = (v) =>
 
   const last = candles[candles.length - 1];
 
-const lx = x(candles.length - 1);
-const ly = y(last.close);
+  const lx = x(candles.length - 1);
+  const ly = y(last.close);
 
-ctx.fillStyle = "#facc15";
-ctx.beginPath();
-ctx.arc(lx, ly, 6, 0, Math.PI * 2);
-ctx.fill();
+  ctx.fillStyle = "#facc15";
+  ctx.beginPath();
+  ctx.arc(lx, ly, 6, 0, Math.PI * 2);
+  ctx.fill();
 
   return canvas.toBuffer("image/png");
 }
@@ -284,8 +285,8 @@ function buildContainer(query, days, stats, liveAuctions, fetchError, hasChart, 
   const reliability = getReliability(stats.totalCount);
   const lines       = [];
 
-  if (stats.marketValue != null)
-    lines.push(`<:minecoins:1512068363864768602> **Marktwert:** ${fmt(stats.marketValue)}$`);
+  if (stats.lastPrice != null)
+    lines.push(`<:minecoins:1512068363864768602> **Marktwert:** ${fmt(stats.lastPrice)}$`);
   if (stats.lastPrice != null)
     lines.push(`<:Emerad:1512068393061318728> **Letzter Preis:** ${fmt(stats.lastPrice)}$`);
   if (stats.avg7d != null)
