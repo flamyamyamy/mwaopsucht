@@ -10,6 +10,8 @@ const COMMANDS = [
   { name: "/markt-uebersicht", desc: "Alle Marktkategorien im Überblick" },
   { name: "/haendler",         desc: "Händler-Wechselkurse (Items → OPShards)" },
   { name: "/hilfe",            desc: "Diese Hilfe anzeigen" },
+  { name: "/search",            desc: "Suche nach einem Item und zeige Statistiken" },
+
 ];
 
 export const data = new SlashCommandBuilder()
