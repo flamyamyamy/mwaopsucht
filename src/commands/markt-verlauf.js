@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, EmbedBuilder } from "discord.js";
+import { SlashCommandBuilder, ContainerBuilder, TextDisplayBuilder, SeparatorBuilder, MessageFlags } from "discord.js";
 import { getItemHistory, getMarketItems, fmt, prettyMaterial } from "../utils/api.js";
 
 export const data = new SlashCommandBuilder()
@@ -15,7 +15,7 @@ export const data = new SlashCommandBuilder()
 export { autocomplete } from "./markt-preis.js";
 
 export async function execute(interaction) {
-  await interaction.deferReply();
+  await interaction.deferReply({ flags: MessageFlags.IsComponentsV2 });
 
   const material = interaction.options.getString("material").toUpperCase();
 
@@ -32,7 +32,6 @@ export async function execute(interaction) {
     return interaction.editReply(`ℹ️ Kein Preisverlauf für \`${material}\` verfügbar.`);
   }
 
-  // Build ASCII-ish bar chart (last 10 entries)
   const last = entries.slice(-10);
   const prices = last.map((h) => h.avgPrice ?? h.price ?? h.buyPrice ?? 0);
   const maxP   = Math.max(...prices);
@@ -50,17 +49,29 @@ export async function execute(interaction) {
     })
     .join("\n");
 
-  const embed = new EmbedBuilder()
-    .setColor(0x57f287)
-    .setTitle(`📊 Preisverlauf: ${prettyMaterial(material)}`)
-    .setDescription(`\`\`\`\n${chart}\n\`\`\``)
-    .addFields(
-      { name: "Minimum",  value: `${fmt(minP)} 💰`, inline: true },
-      { name: "Maximum",  value: `${fmt(maxP)} 💰`, inline: true },
-      { name: "Einträge", value: `${entries.length}`, inline: true }
-    )
-    .setFooter({ text: `Material: ${material}` })
-    .setTimestamp();
+  const container = new ContainerBuilder();
 
-  await interaction.editReply({ embeds: [embed] });
+  container.addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(
+      `# 📊 Preisverlauf: ${prettyMaterial(material)}\n\n\`\`\`\n${chart}\n\`\`\``
+    )
+  );
+
+  container.addSeparatorComponents(new SeparatorBuilder());
+
+  const statsContent = `**Minimum:** ${fmt(minP)} 💰\n**Maximum:** ${fmt(maxP)} 💰\n**Einträge:** ${entries.length}`;
+
+  container.addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(statsContent)
+  );
+
+  container.addSeparatorComponents(new SeparatorBuilder());
+  container.addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(`Material: ${material}`)
+  );
+
+  await interaction.editReply({
+    components: [container],
+    flags: MessageFlags.IsComponentsV2,
+  });
 }

@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, EmbedBuilder } from "discord.js";
+import { SlashCommandBuilder, ContainerBuilder, TextDisplayBuilder, SeparatorBuilder, MessageFlags } from "discord.js";
 import { getActiveAuctions, fmt, fmtRelative } from "../utils/api.js";
 
 export const data = new SlashCommandBuilder()
@@ -31,7 +31,7 @@ const SORT_LABELS = {
 };
 
 export async function execute(interaction) {
-  await interaction.deferReply();
+  await interaction.deferReply({ flags: MessageFlags.IsComponentsV2 });
 
   const query = interaction.options.getString("name").toLowerCase();
   const sort  = interaction.options.getString("sortierung") ?? "asc";
@@ -44,13 +44,15 @@ export async function execute(interaction) {
   });
 
   if (results.length === 0) {
-    const embed = new EmbedBuilder()
-      .setColor(0xff4757)
-      .setTitle("<:Spyglass:1512068258956574751> Keine Ergebnisse")
-      .setDescription(`Für **${query}** wurden keine aktiven Auktionen gefunden.`)
-      .setFooter({ text: "OPSUCHT Auktionshaus" })
-      .setTimestamp();
-    return interaction.editReply({ embeds: [embed] });
+    const container = new ContainerBuilder().addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(
+        `<:Spyglass:1512068258956574751> **Keine Ergebnisse**\n\nFür **${query}** wurden keine aktiven Auktionen gefunden.`
+      )
+    );
+    return interaction.editReply({
+      components: [container],
+      flags: MessageFlags.IsComponentsV2,
+    });
   }
 
   switch (sort) {
@@ -63,42 +65,42 @@ export async function execute(interaction) {
   const total   = results.length;
   results       = results.slice(0, 8);
 
-  // Stats
   const minBid   = Math.min(...results.map((a) => a.currentBid));
   const maxBid   = Math.max(...results.map((a) => a.currentBid));
   const avgBid   = Math.round(results.reduce((s, a) => s + a.currentBid, 0) / results.length);
   const withBuyNow = results.filter((a) => a.instantBuyPrice).length;
 
-  const embed = new EmbedBuilder()
-    .setColor(0xe6b800)
-    .setTitle(`<:Spyglass:1512068258956574751> Suchergebnisse: „${query}"`)
-    .setDescription(
-      `> <:Book:1512074541638226021> **${total}** Auktionen gefunden  •  Sortierung: ${SORT_LABELS[sort]}\n` +
-      `> <:Stick:1512068203163943072> Min: **${fmt(minBid)}$**  •  <:Blaze_Rod:1512068287239032842> Max: **${fmt(maxBid)}$**  •  Ø **${fmt(avgBid)}$**` +
-      (withBuyNow > 0 ? `  •  <:Bundle:1512068142564904992> ${withBuyNow}x Sofortkauf` : "")
-    )
-    .setFooter({ text: `OPSUCHT Auktionshaus • ${results.length} von ${total} gezeigt` })
-    .setTimestamp();
+  const container = new ContainerBuilder();
 
-  for (const a of results) {
+  const headerContent = `# <:Spyglass:1512068258956574751> Suchergebnisse: "${query}"\n\n<:Book:1512074541638226021> **${total}** Auktionen gefunden • Sortierung: ${SORT_LABELS[sort]}\n<:Stick:1512068203163943072> Min: **${fmt(minBid)}$** • <:Blaze_Rod:1512068287239032842> Max: **${fmt(maxBid)}$** • Ø **${fmt(avgBid)}$**${withBuyNow > 0 ? ` • <:Bundle:1512068142564904992> ${withBuyNow}x Sofortkauf` : ""}`;
+
+  container.addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(headerContent)
+  );
+
+  container.addSeparatorComponents(new SeparatorBuilder());
+
+  const resultsLines = results.map((a, idx) => {
     const name     = a.item?.displayName || a.item?.material || "Unbekannt";
     const amount   = a.item?.amount ?? 1;
     const bidCount = Object.keys(a.bids ?? {}).length;
     const hasBids  = bidCount > 0;
     const endsIn   = fmtRelative(a.endTime);
 
-    const lines = [
-      `💰 Gebot: **${fmt(a.currentBid)}$**` + (a.instantBuyPrice ? `  •  <:Bundle:1512068142564904992> Sofortkauf: **${fmt(a.instantBuyPrice)}$**` : ""),
-      `${hasBids ? "<:Fire_Charge:1512068044271386694>" : "⏳"} Gebote: **${bidCount}**  •  <a:Clock:1512068072075427841> Endet: **${endsIn}**`,
-      `🆔 \`${a.uid}\``,
-    ];
+    return `**${idx + 1}. ${amount > 1 ? `${amount}x ` : ""}${name}**\n💰 Gebot: **${fmt(a.currentBid)}$**${a.instantBuyPrice ? ` • <:Bundle:1512068142564904992> Sofortkauf: **${fmt(a.instantBuyPrice)}$**` : ""}\n${hasBids ? "<:Fire_Charge:1512068044271386694>" : "⏳"} Gebote: **${bidCount}** • <a:Clock:1512068072075427841> Endet: **${endsIn}**\n🆔 \`${a.uid}\``;
+  }).join("\n\n");
 
-    embed.addFields({
-      name: `${amount > 1 ? `${amount}x ` : ""}${name}`,
-      value: lines.join("\n"),
-      inline: false,
-    });
-  }
+  container.addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(resultsLines)
+  );
 
-  await interaction.editReply({ embeds: [embed] });
+  container.addSeparatorComponents(new SeparatorBuilder());
+  container.addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(`OPSUCHT Auktionshaus • ${results.length} von ${total} gezeigt`)
+  );
+
+  await interaction.editReply({
+    components: [container],
+    flags: MessageFlags.IsComponentsV2,
+  });
 }

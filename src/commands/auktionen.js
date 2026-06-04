@@ -1,16 +1,5 @@
-import {
-  SlashCommandBuilder,
-  EmbedBuilder,
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle,
-} from "discord.js";
-import {
-  getActiveAuctions,
-  getAuctionCategories,
-  fmt,
-  fmtRelative,
-} from "../utils/api.js";
+import { SlashCommandBuilder, ContainerBuilder, TextDisplayBuilder, SeparatorBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } from "discord.js";
+import { getActiveAuctions, getAuctionCategories, fmt, fmtRelative } from "../utils/api.js";
 
 const PAGE_SIZE = 5;
 
@@ -45,64 +34,53 @@ export async function autocomplete(interaction) {
   }
 }
 
-function buildEmbed(auctions, page, total, category, search) {
+function buildContainer(auctions, page, total, category, search) {
   const start      = page * PAGE_SIZE;
   const slice      = auctions.slice(start, start + PAGE_SIZE);
   const totalPages = Math.ceil(auctions.length / PAGE_SIZE);
 
-  // Quick stats over full result set
   const prices       = auctions.map((a) => a.currentBid).filter(Boolean);
   const minBid       = prices.length ? Math.min(...prices) : null;
   const maxBid       = prices.length ? Math.max(...prices) : null;
   const withBids     = auctions.filter((a) => Object.keys(a.bids ?? {}).length > 0).length;
-  const withBuyNow   = auctions.filter((a) => a.instantBuyPrice).length;
 
-  // Description: filter indicators + stats bar
   const filterParts = [];
   if (category) filterParts.push(`<:Bookshel:1512068009944944691> **${category}**`);
   if (search)   filterParts.push(`<:Spyglass:1512068258956574751> **${search}**`);
   const filterLine = filterParts.length ? filterParts.join("  •  ") + "\n" : "";
 
-  const statsLine =
-    prices.length
-      ? `> <:Stick:1512068203163943072> Min: **${fmt(minBid)}$**  •  <:Blaze_Rod:1512068287239032842> Max: **${fmt(maxBid)}$**  •  <:Fire_Charge:1512068044271386694> ${withBids} aktive Gebote  •  <:Bundle:1512068142564904992> ${withBuyNow}x Sofortkauf`
-      : "";
+  const statsLine = prices.length
+    ? `> <:Stick:1512068203163943072> Min: **${fmt(minBid)}$** • <:Blaze_Rod:1512068287239032842> Max: **${fmt(maxBid)}$** • <:Fire_Charge:1512068044271386694> ${withBids} aktive Gebote`
+    : "";
 
-  const embed = new EmbedBuilder()
-    .setColor(0xe6b800)
-    .setTitle("<:Name_Tag:1512068231198806116> OPSUCHT — Auktionshaus")
-    .setDescription(
-      slice.length === 0
-        ? "❌ Keine Auktionen gefunden."
-        : filterLine + statsLine
-    )
-    .setFooter({
-      text: `Seite ${page + 1}/${totalPages || 1}  •  ${total} Auktionen gesamt  •  OPSUCHT`,
-    })
-    .setTimestamp();
+  const container = new ContainerBuilder();
 
-  for (const a of slice) {
-    const name      = a.item?.displayName || a.item?.material || "Unbekannt";
-    const amount    = a.item?.amount ?? 1;
-    const bid       = fmt(a.currentBid);
-    const endsIn    = fmtRelative(a.endTime);
-    const bidCount  = Object.keys(a.bids ?? {}).length;
-    const hasBid    = bidCount > 0;
+  const headerContent = `# <:Name_Tag:1512068231198806116> OPSUCHT — Auktionshaus\n\n${slice.length === 0 ? "❌ Keine Auktionen gefunden." : filterLine + statsLine}\n\nSeite ${page + 1}/${totalPages || 1} • ${total} Auktionen gesamt`;
 
-    const lines = [
-      `💰 Gebot: **${bid}$**` + (a.instantBuyPrice ? `  •  <:Bundle:1512068142564904992> Sofortkauf: **${fmt(a.instantBuyPrice)}$**` : ""),
-      `${hasBid ? "<:Fire_Charge:1512068044271386694>" : "⏳"} Gebote: **${bidCount}**  •  <a:Clock:1512068072075427841> Endet: **${endsIn}**`,
-      `🆔 \`${a.uid}\``,
-    ];
+  container.addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(headerContent)
+  );
 
-    embed.addFields({
-      name: `${amount > 1 ? `${amount}x ` : ""}${name}`,
-      value: lines.join("\n"),
-      inline: false,
-    });
+  if (slice.length > 0) {
+    container.addSeparatorComponents(new SeparatorBuilder());
+
+    const auctionLines = slice.map((a) => {
+      const name      = a.item?.displayName || a.item?.material || "Unbekannt";
+      const amount    = a.item?.amount ?? 1;
+      const bid       = fmt(a.currentBid);
+      const endsIn    = fmtRelative(a.endTime);
+      const bidCount  = Object.keys(a.bids ?? {}).length;
+      const hasBid    = bidCount > 0;
+
+      return `**${amount > 1 ? `${amount}x ` : ""}${name}**\n💰 Gebot: **${bid}$**${a.instantBuyPrice ? ` • <:Bundle:1512068142564904992> Sofortkauf: **${fmt(a.instantBuyPrice)}$**` : ""}\n${hasBid ? "<:Fire_Charge:1512068044271386694>" : "⏳"} Gebote: **${bidCount}** • <a:Clock:1512068072075427841> Endet: **${endsIn}**\n🆔 \`${a.uid}\``;
+    }).join("\n\n");
+
+    container.addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(auctionLines)
+    );
   }
 
-  return embed;
+  return container;
 }
 
 function buildRow(page, totalPages) {
@@ -126,14 +104,13 @@ function buildRow(page, totalPages) {
 }
 
 export async function execute(interaction) {
-  await interaction.deferReply();
+  await interaction.deferReply({ flags: MessageFlags.IsComponentsV2 });
 
   const categoryArg = interaction.options.getString("kategorie") ?? null;
   const search      = interaction.options.getString("suche")?.toLowerCase() ?? null;
 
   let auctions = await getActiveAuctions(categoryArg);
 
-  // Resolve category display name
   let categoryName = categoryArg;
   if (categoryArg) {
     try {
@@ -149,17 +126,18 @@ export async function execute(interaction) {
     });
   }
 
-  // Sort by soonest ending first
   auctions.sort((a, b) => new Date(a.endTime) - new Date(b.endTime));
 
   const total      = auctions.length;
   let   page       = 0;
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
-  const embed = buildEmbed(auctions, page, total, categoryName, search);
+  const container = buildContainer(auctions, page, total, categoryName, search);
+  const components = totalPages > 1 ? [container, buildRow(page, totalPages)] : [container];
+  
   const reply = await interaction.editReply({
-    embeds: [embed],
-    components: totalPages > 1 ? [buildRow(page, totalPages)] : [],
+    components,
+    flags: MessageFlags.IsComponentsV2,
   });
 
   if (totalPages <= 1) return;
@@ -173,8 +151,8 @@ export async function execute(interaction) {
     if (i.customId === "prev" && page > 0) page--;
     else if (i.customId === "next" && page < totalPages - 1) page++;
     await i.update({
-      embeds: [buildEmbed(auctions, page, total, categoryName, search)],
-      components: [buildRow(page, totalPages)],
+      components: [buildContainer(auctions, page, total, categoryName, search), buildRow(page, totalPages)],
+      flags: MessageFlags.IsComponentsV2,
     });
   });
 

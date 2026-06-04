@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, EmbedBuilder } from "discord.js";
+import { SlashCommandBuilder, ContainerBuilder, TextDisplayBuilder, SeparatorBuilder, MessageFlags } from "discord.js";
 
 const COMMANDS = [
   { name: "/auktionen",        desc: "Aktive Auktionen durchsuchen & blättern" },
@@ -17,15 +17,26 @@ export const data = new SlashCommandBuilder()
   .setDescription("Zeigt alle verfügbaren Befehle des Bots");
 
 export async function execute(interaction) {
-  const embed = new EmbedBuilder()
-    .setColor(0x5865f2)
-    .setTitle("📖 OPSUCHT Bot – Befehle")
-    .setDescription("Alle verfügbaren Slash-Commands:")
-    .addFields(
-      COMMANDS.map((c) => ({ name: c.name, value: c.desc, inline: false }))
-    )
-    .setFooter({ text: "Daten von api.opsucht.net" })
-    .setTimestamp();
+  const container = new ContainerBuilder();
 
-  await interaction.reply({ embeds: [embed], flags: 64 });
+  container.addTextDisplayComponents(
+    new TextDisplayBuilder().setContent("# 📖 OPSUCHT Bot – Befehle\n\nAlle verfügbaren Slash-Commands:")
+  );
+
+  container.addSeparatorComponents(new SeparatorBuilder());
+
+  const commandLines = COMMANDS.map((c) => `**${c.name}** — ${c.desc}`).join("\n");
+  container.addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(commandLines)
+  );
+
+  container.addSeparatorComponents(new SeparatorBuilder());
+  container.addTextDisplayComponents(
+    new TextDisplayBuilder().setContent("Daten von api.opsucht.net")
+  );
+
+  await interaction.reply({
+    components: [container],
+    flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
+  });
 }

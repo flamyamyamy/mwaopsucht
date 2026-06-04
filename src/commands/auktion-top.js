@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, EmbedBuilder } from "discord.js";
+import { SlashCommandBuilder, ContainerBuilder, TextDisplayBuilder, SeparatorBuilder, MessageFlags } from "discord.js";
 import { getActiveAuctions, fmt, fmtRelative } from "../utils/api.js";
 
 export const data = new SlashCommandBuilder()
@@ -27,7 +27,7 @@ export const data = new SlashCommandBuilder()
 export { autocomplete } from "./auktionen.js";
 
 export async function execute(interaction) {
-  await interaction.deferReply();
+  await interaction.deferReply({ flags: MessageFlags.IsComponentsV2 });
 
   const sortBy   = interaction.options.getString("nach") ?? "price";
   const category = interaction.options.getString("kategorie") ?? null;
@@ -53,31 +53,39 @@ export async function execute(interaction) {
     buynow: "🛒 Top 10 – Günstigste Sofortkäufe",
   };
 
-  const embed = new EmbedBuilder()
-    .setColor(0xe6b800)
-    .setTitle(labels[sortBy] ?? "🏷️ Top Auktionen")
-    .setFooter({ text: `${auctions.length} Auktionen durchsucht` })
-    .setTimestamp();
+  const container = new ContainerBuilder();
+
+  container.addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(
+      `# ${labels[sortBy] ?? "🏷️ Top Auktionen"}\n\n${auctions.length} Auktionen durchsucht`
+    )
+  );
 
   if (top.length === 0) {
-    embed.setDescription("Keine Auktionen gefunden.");
+    container.addSeparatorComponents(new SeparatorBuilder());
+    container.addTextDisplayComponents(
+      new TextDisplayBuilder().setContent("Keine Auktionen gefunden.")
+    );
+  } else {
+    container.addSeparatorComponents(new SeparatorBuilder());
+
+    const topLines = top.map((a, i) => {
+      const name     = a.item?.displayName || a.item?.material || "Unbekannt";
+      const amount   = a.item?.amount ?? 1;
+      const bidCount = Object.keys(a.bids ?? {}).length;
+      const extra    = sortBy === "bids" ? ` • ${bidCount} Gebote` : "";
+      const buyNow   = a.instantBuyPrice ? ` | SK: **${fmt(a.instantBuyPrice)}** 💰` : "";
+
+      return `**${i + 1}. ${amount > 1 ? `${amount}x ` : ""}${name}**\nGebot: **${fmt(a.currentBid)}** 💰${buyNow}${extra}\nEndet ${fmtRelative(a.endTime)} • UID: \`${a.uid}\``;
+    }).join("\n\n");
+
+    container.addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(topLines)
+    );
   }
 
-  for (const [i, a] of top.entries()) {
-    const name     = a.item?.displayName || a.item?.material || "Unbekannt";
-    const amount   = a.item?.amount ?? 1;
-    const bidCount = Object.keys(a.bids ?? {}).length;
-    const extra    = sortBy === "bids" ? ` • ${bidCount} Gebote` : "";
-    const buyNow   = a.instantBuyPrice ? ` | SK: **${fmt(a.instantBuyPrice)}** 💰` : "";
-
-    embed.addFields({
-      name: `${i + 1}. ${amount > 1 ? `${amount}x ` : ""}${name}`,
-      value:
-        `Gebot: **${fmt(a.currentBid)}** 💰${buyNow}${extra}\n` +
-        `Endet ${fmtRelative(a.endTime)} • UID: \`${a.uid}\``,
-      inline: false,
-    });
-  }
-
-  await interaction.editReply({ embeds: [embed] });
+  await interaction.editReply({
+    components: [container],
+    flags: MessageFlags.IsComponentsV2,
+  });
 }

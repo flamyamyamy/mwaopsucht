@@ -1,11 +1,5 @@
-import { SlashCommandBuilder, EmbedBuilder } from "discord.js";
-import {
-  getMarketItems,
-  getItemPrice,
-  getItemHistory,
-  fmt,
-  prettyMaterial,
-} from "../utils/api.js";
+import { SlashCommandBuilder, ContainerBuilder, TextDisplayBuilder, SeparatorBuilder, MessageFlags } from "discord.js";
+import { getMarketItems, getItemPrice, getItemHistory, fmt, prettyMaterial } from "../utils/api.js";
 
 export const data = new SlashCommandBuilder()
   .setName("markt-preis")
@@ -35,39 +29,24 @@ export async function autocomplete(interaction) {
   }
 }
 
-/**
- * Parse the API response format:
- * { "AMETHYST_SHARD": [ { orderSide: "BUY", activeOrders: 266, price: 3.9 }, ... ] }
- * Returns { buy, sell } or falls back to legacy field names.
- */
 function parseOrders(material, raw) {
-  // New format: object keyed by material
   const entries = raw?.[material] ?? raw?.[material.toLowerCase()];
   if (Array.isArray(entries)) {
     const buy  = entries.find((e) => e.orderSide === "BUY");
     const sell = entries.find((e) => e.orderSide === "SELL");
     return { buy, sell, isNewFormat: true };
   }
-
-  // Legacy flat format
   const flat = Array.isArray(raw) ? raw[0] : raw;
   return { flat, isNewFormat: false };
 }
 
-/**
- * Returns a URL to the Minecraft block texture via mc-api.io.
- * Material names in Minecraft format (e.g., NETHERITE_AXE -> netherite_axe)
- */
 function itemIconUrl(material) {
-  // Normalize: NETHERITE_AXE -> netherite_axe
   const name = material.toLowerCase().replace(/^minecraft:/, "");
-  
-  // mc-api.io provides direct PNG links to Minecraft item textures
   return `https://img.mc-api.io/${name}.png`;
 }
 
 export async function execute(interaction) {
-  await interaction.deferReply();
+  await interaction.deferReply({ flags: MessageFlags.IsComponentsV2 });
 
   const material = interaction.options.getString("material").toUpperCase();
 
@@ -87,55 +66,69 @@ export async function execute(interaction) {
   const { buy, sell, flat, isNewFormat } = parseOrders(material, priceData);
   const displayName = prettyMaterial(material);
 
-  const embed = new EmbedBuilder()
-    .setColor(0x57f287)
-    .setTitle(`📈 Marktpreis: ${displayName}`)
-    .setThumbnail(itemIconUrl(material))
-    .setTimestamp();
+  const container = new ContainerBuilder();
+
+  container.addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(`# 📈 Marktpreis: ${displayName}`)
+  );
 
   if (isNewFormat) {
-    // ── New orderSide format ──────────────────────────────────────────────────
     const buyPrice   = buy?.price;
     const sellPrice  = sell?.price;
     const buyOrders  = buy?.activeOrders;
     const sellOrders = sell?.activeOrders;
 
-    // Spread / margin
     const spread = (buyPrice != null && sellPrice != null)
       ? Math.abs(buyPrice - sellPrice).toFixed(2)
       : null;
 
-    // Description: visual price comparison
+    container.addSeparatorComponents(new SeparatorBuilder());
+
     const descLines = [];
-    if (buyPrice  != null) descLines.push(`<:minecoin:1512068363864768602> **Kaufpreis:**  \`${fmt(buyPrice)}$\`  *(${buyOrders ?? "?"} Aufträge)*`);
-    if (sellPrice != null) descLines.push(`<:Redstone:1512068332122017822> **Verkaufspreis:** \`${fmt(sellPrice)}$\`  *(${sellOrders ?? "?"} Aufträge)*`);
+    if (buyPrice  != null) descLines.push(`<:minecoin:1512068363864768602> **Kaufpreis:** \`${fmt(buyPrice)}$\` *(${buyOrders ?? "?"} Aufträge)*`);
+    if (sellPrice != null) descLines.push(`<:Redstone:1512068332122017822> **Verkaufspreis:** \`${fmt(sellPrice)}$\` *(${sellOrders ?? "?"} Aufträge)*`);
     if (spread    != null) descLines.push(`<:Arrow:1512067924117159947> **Spread:** \`${spread}$\``);
 
-    embed.setDescription(descLines.join("\n"));
+    container.addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(descLines.join("\n"))
+    );
 
-    // Fields: quick stats inline
-    if (buyPrice  != null) embed.addFields({ name: "<:minecoin:1512068363864768602> Kaufpreis",       value: `**${fmt(buyPrice)}$**`,   inline: true });
-    if (sellPrice != null) embed.addFields({ name: "<:Redstone:1512068332122017822> Verkaufspreis",   value: `**${fmt(sellPrice)}$**`,  inline: true });
-    if (spread    != null) embed.addFields({ name: "<:Arrow:1512067924117159947> Spread",          value: `**${spread}$**`,          inline: true });
-    if (buyOrders  != null) embed.addFields({ name: "<a:chest:1512077870481145939> Kauf-Aufträge",  value: `${fmt(buyOrders)}`,       inline: true });
-    if (sellOrders != null) embed.addFields({ name: "<a:chest:1512077870481145939> Verkauf-Aufträge", value: `${fmt(sellOrders)}`,    inline: true });
+    const fieldLines = [];
+    if (buyPrice  != null) fieldLines.push(`**<:minecoin:1512068363864768602> Kaufpreis**\n${fmt(buyPrice)}$`);
+    if (sellPrice != null) fieldLines.push(`**<:Redstone:1512068332122017822> Verkaufspreis**\n${fmt(sellPrice)}$`);
+    if (spread    != null) fieldLines.push(`**<:Arrow:1512067924117159947> Spread**\n${spread}$`);
+    if (buyOrders  != null) fieldLines.push(`**<a:chest:1512077870481145939> Kauf-Aufträge**\n${fmt(buyOrders)}`);
+    if (sellOrders != null) fieldLines.push(`**<a:chest:1512077870481145939> Verkauf-Aufträge**\n${fmt(sellOrders)}`);
 
+    if (fieldLines.length > 0) {
+      container.addSeparatorComponents(new SeparatorBuilder());
+      container.addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(fieldLines.join("\n\n"))
+      );
+    }
   } else if (flat) {
-    // ── Legacy flat format ────────────────────────────────────────────────────
-    if (flat.buyPrice  != null) embed.addFields({ name: "<:minecoin:1512068363864768602> Kaufpreis",       value: `${fmt(flat.buyPrice)}$`,  inline: true });
-    if (flat.sellPrice != null) embed.addFields({ name: "<:Redstone:1512068332122017822> Verkaufspreis",   value: `${fmt(flat.sellPrice)}$`, inline: true });
-    if (flat.avgPrice  != null) embed.addFields({ name: "<:Arrow:1512067924117159947> Ø Preis",           value: `${fmt(flat.avgPrice)}$`,  inline: true });
-    if (flat.minPrice  != null) embed.addFields({ name: "<:Chart_Decrease:1512068424994570240> Minimum",   value: `${fmt(flat.minPrice)}$`,  inline: true });
-    if (flat.maxPrice  != null) embed.addFields({ name: "<:Chart_Increase:1512068453287570432> Maximum",   value: `${fmt(flat.maxPrice)}$`,  inline: true });
-    if (flat.volume    != null) embed.addFields({ name: "<:BarChart:1512068481580570624> Volumen",        value: fmt(flat.volume),          inline: true });
+    container.addSeparatorComponents(new SeparatorBuilder());
 
-    if (!embed.data.fields?.length) {
+    const flatLines = [];
+    if (flat.buyPrice  != null) flatLines.push(`**<:minecoin:1512068363864768602> Kaufpreis**\n${fmt(flat.buyPrice)}$`);
+    if (flat.sellPrice != null) flatLines.push(`**<:Redstone:1512068332122017822> Verkaufspreis**\n${fmt(flat.sellPrice)}$`);
+    if (flat.avgPrice  != null) flatLines.push(`**<:Arrow:1512067924117159947> Ø Preis**\n${fmt(flat.avgPrice)}$`);
+    if (flat.minPrice  != null) flatLines.push(`**<:Chart_Decrease:1512068424994570240> Minimum**\n${fmt(flat.minPrice)}$`);
+    if (flat.maxPrice  != null) flatLines.push(`**<:Chart_Increase:1512068453287570432> Maximum**\n${fmt(flat.maxPrice)}$`);
+    if (flat.volume    != null) flatLines.push(`**<:BarChart:1512068481580570624> Volumen**\n${fmt(flat.volume)}`);
+
+    if (flatLines.length > 0) {
+      container.addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(flatLines.join("\n\n"))
+      );
+    } else {
       const raw = JSON.stringify(flat, null, 2).slice(0, 1000);
-      embed.setDescription(`\`\`\`json\n${raw}\n\`\`\``);
+      container.addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(`\`\`\`json\n${raw}\n\`\`\``)
+      );
     }
   }
 
-  // ── Price history (last 7 entries) ─────────────────────────────────────────
   const hist = Array.isArray(historyData) ? historyData.slice(-7) : [];
   if (hist.length > 0) {
     const prices = hist.map((h) => h.avgPrice ?? h.price ?? h.sellPrice ?? 0);
@@ -155,10 +148,19 @@ export async function execute(interaction) {
       })
       .join("\n");
 
-    embed.addFields({ name: "📊 Preisverlauf (letzte 7 Tage)", value: histText, inline: false });
+    container.addSeparatorComponents(new SeparatorBuilder());
+    container.addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(`**📊 Preisverlauf (letzte 7 Tage)**\n${histText}`)
+    );
   }
 
-  embed.setFooter({ text: `Material: ${material}  •  OPSUCHT Markt` });
+  container.addSeparatorComponents(new SeparatorBuilder());
+  container.addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(`Material: ${material} • OPSUCHT Markt`)
+  );
 
-  await interaction.editReply({ embeds: [embed] });
+  await interaction.editReply({
+    components: [container],
+    flags: MessageFlags.IsComponentsV2,
+  });
 }

@@ -1,9 +1,9 @@
 import {
   SlashCommandBuilder,
-  EmbedBuilder,
-  ActionRowBuilder,
-  StringSelectMenuBuilder,
-  AttachmentBuilder,
+  ContainerBuilder,
+  TextDisplayBuilder,
+  SeparatorBuilder,
+  MessageFlags,
 } from "discord.js";
 import { createCanvas } from "@napi-rs/canvas";
 import { getActiveAuctions, fmt, fmtRelative } from "../utils/api.js";
@@ -59,7 +59,7 @@ export async function autocomplete(interaction) {
 // ── Execute ───────────────────────────────────────────────────────────────────
 
 export async function execute(interaction) {
-  await interaction.deferReply();
+  await interaction.deferReply({ flags: MessageFlags.IsComponentsV2 });
 
   const query = interaction.options.getString("item");
   const days  = interaction.options.getInteger("tage") ?? 30;
@@ -93,76 +93,35 @@ export async function execute(interaction) {
   const itemIcon = itemMaterial ? getItemIconUrl(itemMaterial) : null;
 
   // ── 4) Chart generieren ───────────────────────────────────────────────────
-  let chartAttachment = null;
+  let chartBuffer = null;
   if (history.length >= 2) {
     try {
-      const chartBuffer  = renderChart(query, history);
-      chartAttachment    = new AttachmentBuilder(chartBuffer, { name: "preisverlauf.png" });
+      chartBuffer = renderChart(query, history);
     } catch (err) {
       console.error("[search] chart render error:", err);
     }
   }
 
-  // ── 5) Embed bauen & senden (v2 Components) ───────────────────────────────
-  const embed     = buildEmbed(query, days, stats, history, liveAuctions, fetchError, !!chartAttachment, itemIcon);
-  const actionRow = buildActionRow(query, days);
+  // ── 5) Container bauen & senden ────────────────────────────────────────────
+  const container = buildContainer(query, days, stats, history, liveAuctions, fetchError, chartBuffer, itemIcon);
 
   const replyOptions = {
-    embeds: [embed],
-    components: [actionRow],
+    components: [container],
+    flags: MessageFlags.IsComponentsV2,
   };
-  if (chartAttachment) replyOptions.files = [chartAttachment];
+  
+  if (chartBuffer) {
+    replyOptions.files = [{
+      attachment: chartBuffer,
+      name: "preisverlauf.png",
+    }];
+  }
 
-  const reply = await interaction.editReply(replyOptions);
-
-  // ── 6) Select-Menu Collector (3 min) ──────────────────────────────────────
-  const collector = reply.createMessageComponentCollector({
-    filter: (i) =>
-      i.user.id === interaction.user.id &&
-      i.customId.startsWith("search_period:"),
-    time: 180_000,
-  });
-
-  collector.on("collect", async (i) => {
-    const newDays = parseInt(i.values[0], 10);
-    await i.deferUpdate();
-
-    const newStats   = getItemStats(query, newDays);
-    const newHistory = getPriceHistory(query, newDays);
-
-    let newAttachment = null;
-    if (newHistory.length >= 2) {
-      try {
-        const buf    = renderChart(query, newHistory);
-        newAttachment = new AttachmentBuilder(buf, { name: "preisverlauf.png" });
-      } catch (err) {
-        console.error("[search] chart re-render error:", err);
-      }
-    }
-
-    const newEmbed   = buildEmbed(query, newDays, newStats, newHistory, liveAuctions, fetchError, !!newAttachment, itemIcon);
-    const updateOpts = {
-      embeds: [newEmbed],
-      components: [buildActionRow(query, newDays)],
-    };
-    if (newAttachment) updateOpts.files = [newAttachment];
-    else               updateOpts.files = [];
-
-    await i.editReply(updateOpts);
-  });
-
-  collector.on("end", () => {
-    interaction.editReply({ components: [] }).catch(() => {});
-  });
+  await interaction.editReply(replyOptions);
 }
 
 // ── Canvas Chart ──────────────────────────────────────────────────────────────
 
-/**
- * Rendert einen Preisverlauf-Chart mit intelligenter Skalierung.
- * Dunkler Hintergrund, orangene Linie mit Punkten, Grid, Datum auf X-Achse.
- * Gibt einen PNG-Buffer zurück.
- */
 function renderChart(title, history) {
   const W = 800, H = 400;
   const PAD = { top: 50, right: 30, bottom: 60, left: 90 };
@@ -175,10 +134,9 @@ function renderChart(title, history) {
   ctx.fillRect(0, 0, W, H);
 
   // ── Daten vorbereiten ─────────────────────────────────────────────────────
-  // Maximal 60 Punkte (gleichmäßig samplen)
   const sampled = sampleArray(history, 60);
   const prices  = sampled.map((h) => h.current_bid ?? 0);
-  const times   = sampled.map((h) => h.recorded_at * 1000); // ms
+  const times   = sampled.map((h) => h.recorded_at * 1000);
 
   // ── Intelligente Min/Max-Berechnung (Outlier filtern) ───────────────────
   const sorted = [...prices].sort((a, b) => a - b);
@@ -188,11 +146,9 @@ function renderChart(title, history) {
   const q3 = sorted[q3Idx];
   const iqr = q3 - q1;
   
-  // Outlier-Grenzen: Q1 - 1.5*IQR bis Q3 + 1.5*IQR
   const lowerBound = Math.max(0, q1 - 1.5 * iqr);
   const upperBound = q3 + 1.5 * iqr;
   
-  // Min/Max innerhalb der Grenzen
   let minP = upperBound;
   let maxP = lowerBound;
   for (const p of prices) {
@@ -202,13 +158,11 @@ function renderChart(title, history) {
     }
   }
   
-  // Fallback wenn zu extreme Daten
   if (minP >= maxP) {
     minP = Math.min(...prices);
     maxP = Math.max(...prices);
   }
   
-  // Padding hinzufügen (10% oben und unten)
   const range = maxP - minP || 1;
   minP = Math.max(0, minP - range * 0.1);
   maxP = maxP + range * 0.1;
@@ -219,7 +173,6 @@ function renderChart(title, history) {
   const chartW = W - PAD.left - PAD.right;
   const chartH = H - PAD.top  - PAD.bottom;
 
-  // Hilfsfunktionen: Wert → Pixel (mit Clamping)
   const xPx = (t) => PAD.left + ((t - minT) / (maxT - minT || 1)) * chartW;
   const yPx = (p) => {
     const clamped = Math.max(minP, Math.min(maxP, p));
@@ -268,29 +221,6 @@ function renderChart(title, history) {
     ctx.fillText(dateStr, x, H - PAD.bottom + 12);
   }
 
-  // ── X-Achsen-Label ────────────────────────────────────────────────────────
-  ctx.fillStyle    = "#cccccc";
-  ctx.font         = "13px sans-serif";
-  ctx.textAlign    = "center";
-  ctx.textBaseline = "bottom";
-  ctx.fillText("Datum", W / 2, H - 4);
-
-  // ── Y-Achsen-Label ────────────────────────────────────────────────────────
-  ctx.save();
-  ctx.translate(14, H / 2);
-  ctx.rotate(-Math.PI / 2);
-  ctx.textAlign    = "center";
-  ctx.textBaseline = "top";
-  ctx.fillText("Preis ($)", 0, 0);
-  ctx.restore();
-
-  // ── Titel ─────────────────────────────────────────────────────────────────
-  ctx.fillStyle    = "#ffffff";
-  ctx.font         = "bold 15px sans-serif";
-  ctx.textAlign    = "center";
-  ctx.textBaseline = "top";
-  ctx.fillText("Preisverlauf", W / 2, 14);
-
   // ── Achsen-Linien ─────────────────────────────────────────────────────────
   ctx.strokeStyle = "#555";
   ctx.lineWidth   = 1;
@@ -300,7 +230,7 @@ function renderChart(title, history) {
   ctx.lineTo(PAD.left + chartW, PAD.top + chartH);
   ctx.stroke();
 
-  // ── Gradient unter der Linie ──────────────────────────────────────────────
+  // ── Gradient & Linie ──────────────────────────────────────────────────────
   const grad = ctx.createLinearGradient(0, PAD.top, 0, PAD.top + chartH);
   grad.addColorStop(0,   "rgba(230, 184, 0, 0.25)");
   grad.addColorStop(1,   "rgba(230, 184, 0, 0.00)");
@@ -316,7 +246,6 @@ function renderChart(title, history) {
   ctx.fillStyle = grad;
   ctx.fill();
 
-  // ── Linie ─────────────────────────────────────────────────────────────────
   ctx.strokeStyle = "#e6b800";
   ctx.lineWidth   = 2.5;
   ctx.lineJoin    = "round";
@@ -336,45 +265,16 @@ function renderChart(title, history) {
     ctx.fill();
   }
 
-  // ── Legende ───────────────────────────────────────────────────────────────
-  const legendX = W - PAD.right - 150;
-  const legendY = PAD.top + 10;
-  ctx.strokeStyle = "#e6b800";
-  ctx.lineWidth   = 2;
-  ctx.beginPath();
-  ctx.moveTo(legendX, legendY + 6);
-  ctx.lineTo(legendX + 20, legendY + 6);
-  ctx.stroke();
-  ctx.fillStyle = "#e6b800";
-  ctx.beginPath();
-  ctx.arc(legendX + 10, legendY + 6, 3.5, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle    = "#cccccc";
-  ctx.font         = "12px sans-serif";
-  ctx.textAlign    = "left";
-  ctx.textBaseline = "middle";
-  ctx.fillText("Verkaufspreis ($)", legendX + 26, legendY + 6);
-
   return canvas.toBuffer("image/png");
 }
 
-// ── Embed (v2) mit Item-Icon oben rechts ──────────────────────────────────────
+// ── Container Builder ─────────────────────────────────────────────────────────
 
-function buildEmbed(query, days, stats, history, liveAuctions, fetchError, hasChart, itemIcon) {
-  const embed = new EmbedBuilder()
-    .setColor(0xe6b800)
-    .setTitle(`🛒 ${query}`)
-    .setTimestamp();
-
-  // ── Thumbnail (Item-Icon oben rechts) ─────────────────────────────────────
-  if (itemIcon) {
-    embed.setThumbnail(itemIcon);
-  }
-
-  if (hasChart) embed.setImage("attachment://preisverlauf.png");
-
+function buildContainer(query, days, stats, history, liveAuctions, fetchError, chartBuffer, itemIcon) {
+  const container = new ContainerBuilder();
+  
   const reliability = getReliability(stats.totalCount);
-  const lines       = [];
+  const lines = [];
 
   if (stats.marketValue != null)
     lines.push(`<:minecoin:1045876432123456789> **Marktwert:** ${fmt(stats.marketValue)}$`);
@@ -396,14 +296,25 @@ function buildEmbed(query, days, stats, history, liveAuctions, fetchError, hasCh
   );
   lines.push(`<:Name_Tag:1045876432123456789> **Verlässlichkeit:** ${reliability.label}`);
 
-  embed.setDescription(
-    lines.length > 0
-      ? lines.join("\n")
-      : "⚠️ Noch keine Daten in der DB für dieses Item.\n" +
-        "Daten werden gesammelt, sobald das Item im AH erscheint."
+  const statsContent = lines.length > 0
+    ? `# 🛒 ${query}\n\n${lines.join("\n")}`
+    : `# 🛒 ${query}\n\n⚠️ Noch keine Daten in der DB für dieses Item.\nDaten werden gesammelt, sobald das Item im AH erscheint.`;
+
+  container.addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(statsContent)
   );
 
-  // ── Live-Auktionen ────────────────────────────────────────────────────────
+  // ── Chart ─────────────────────────────────────────────────────────────────
+  if (chartBuffer) {
+    container.addSeparatorComponents(new SeparatorBuilder());
+    container.addTextDisplayComponents(
+      new TextDisplayBuilder().setContent("📊 **Preisverlauf**\n![chart](attachment://preisverlauf.png)")
+    );
+  }
+
+  // ── Live Auktionen ────────────────────────────────────────────────────────
+  container.addSeparatorComponents(new SeparatorBuilder());
+
   if (liveAuctions.length > 0) {
     const sorted    = [...liveAuctions]
       .sort((a, b) => (a.currentBid ?? 0) - (b.currentBid ?? 0))
@@ -419,75 +330,47 @@ function buildEmbed(query, days, stats, history, liveAuctions, fetchError, hasCh
       return `\`${amount > 1 ? `${amount}x ` : ""}${name}\`  💰 **${bid}$**${buynow}  ⏱ ${endsIn}  (${bidCount} Gebote)`;
     });
 
-    embed.addFields({
-      name: `🏪 Aktive Auktionen (${liveAuctions.length} gefunden, günstigste 5)`,
-      value: liveLines.join("\n"),
-      inline: false,
-    });
+    container.addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(
+        `🏪 **Aktive Auktionen** (${liveAuctions.length} gefunden, günstigste 5)\n\n${liveLines.join("\n")}`
+      )
+    );
   } else if (fetchError) {
-    embed.addFields({
-      name: "⚠️ Live-Daten nicht verfügbar",
-      value: "API konnte nicht erreicht werden. Zeige nur DB-Daten.",
-      inline: false,
-    });
+    container.addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(
+        `⚠️ **Live-Daten nicht verfügbar**\nAPI konnte nicht erreicht werden. Zeige nur DB-Daten.`
+      )
+    );
   } else {
-    embed.addFields({
-      name: "🏪 Aktive Auktionen",
-      value: "Aktuell keine aktiven Auktionen für dieses Item.",
-      inline: false,
-    });
+    container.addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(
+        `🏪 **Aktive Auktionen**\nAktuell keine aktiven Auktionen für dieses Item.`
+      )
+    );
   }
 
-  embed.setFooter({
-    text: `🗃️ DB: ${countItems()} Items • ${countSnapshots()} Snapshots  •  Zeitraum: ${days === 999 ? "Alle Daten" : `${days} Tage`}  •  OPSUCHT AH`,
-  });
-
-  return embed;
-}
-
-/**
- * Erstellt Action Row mit StringSelectMenu (v2 Components).
- * CustomId: search_period:<itemname>
- */
-function buildActionRow(query, days) {
-  return new ActionRowBuilder().addComponents(
-    new StringSelectMenuBuilder()
-      .setCustomId(`search_period:${query}`)
-      .setPlaceholder(days === 999 ? "Alle Daten" : `${days} Tage`)
-      .addOptions([
-        { label: "7 Tage",  value: "7",   description: "Statistik der letzten 7 Tage",  default: days === 7   },
-        { label: "30 Tage", value: "30",  description: "Statistik der letzten 30 Tage", default: days === 30  },
-        { label: "90 Tage", value: "90",  description: "Statistik der letzten 90 Tage", default: days === 90  },
-        { label: "Alle",    value: "999", description: "Alle gespeicherten Daten",       default: days === 999 },
-      ])
+  // ── Footer ────────────────────────────────────────────────────────────────
+  container.addSeparatorComponents(new SeparatorBuilder());
+  container.addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(
+      `🗃️ DB: ${countItems()} Items • ${countSnapshots()} Snapshots  •  Zeitraum: ${days === 999 ? "Alle Daten" : `${days} Tage`}  •  OPSUCHT AH`
+    )
   );
+
+  return container;
 }
 
 // ── Utils ─────────────────────────────────────────────────────────────────────
 
-/**
- * Erstellt eine URL zum Minecraft Item-Icon basierend auf Material.
- * Nutzt mc-api.io für direkte Asset-PNGs.
- * 
- * Material-Namen in Minecraft-Format (z.B. NETHERITE_AXE -> netherite_axe)
- */
 function getItemIconUrl(material) {
   if (!material) return null;
-  
-  // Normalisiere material name
-  // Entferne "minecraft:" prefix falls vorhanden
   let normalized = material.toLowerCase().replace(/^minecraft:/, "");
-  
-  // Falls es Spaces hat, ersetze sie mit Unterstrichen
   if (normalized.includes(" ")) {
     normalized = normalized.replace(/ /g, "_");
   }
-  
-  // mc-api.io Textur URL
   return `https://img.mc-api.io/${normalized}.png`;
 }
 
-/** Gleichmäßiges Downsampling eines Arrays auf maximal `n` Einträge */
 function sampleArray(arr, n) {
   if (arr.length <= n) return arr;
   const result = [];
@@ -497,14 +380,12 @@ function sampleArray(arr, n) {
   return result;
 }
 
-/** Kompakte Zahl-Formatierung für Y-Achse: 1.000.000 → 1M, 340000 → 340K */
 function fmtShort(n) {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(".", ",") + "M";
   if (n >= 1_000)     return (n / 1_000).toFixed(0) + "K";
   return String(Math.round(n));
 }
 
-/** Verlässlichkeit basierend auf Datenmenge */
 function getReliability(count) {
   if (count >= 50) return { label: "✅ Verlässlich",          score: 3 };
   if (count >= 15) return { label: "🟡 Eingeschränkt",        score: 2 };
