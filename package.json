@@ -1,0 +1,16 @@
+{
+  "name": "opsucht-bot",
+  "version": "1.0.0",
+  "description": "OPSUCHT Discord Bot – Auktionen, Markt & Händler",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "deploy": "node src/deploy.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.26.0",
+    "dotenv": "^17.3.1",
+    "node-fetch": "^3.3.2"
+  }
+}
