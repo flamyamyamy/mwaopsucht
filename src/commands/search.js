@@ -16,7 +16,7 @@ import {
   saveAuctions,
   searchItems,
   getItemStats,
-  getPriceHistory,
+  getMarketHistory,
   countItems,
   countSnapshots,
 } from "../utils/db.js";
@@ -92,8 +92,8 @@ export async function execute(interaction) {
   }
 
   // ── 2) DB-Statistiken ────────────────────────────────────────────────────
-  const stats   = getItemStats(query, days);
-  const history = getPriceHistory(query, days);
+const stats = getItemStats(query, days);
+const history = getMarketHistory(query, days);
 
   // ── 3) Item-Icon URL ─────────────────────────────────────────────────────
   const itemIcon = itemMaterial ? getItemIconUrl(itemMaterial) : null;
@@ -179,169 +179,100 @@ export async function execute(interaction) {
 // ── Canvas Chart ───────────────────────────────────────────────────────────────
 
 function renderChart(title, history) {
-  const W = 800, H = 400;
-  const PAD = { top: 50, right: 30, bottom: 60, left: 90 };
+  const W = 900, H = 450;
+
+  const PAD = { top: 50, right: 40, bottom: 70, left: 90 };
 
   const canvas = createCanvas(W, H);
-  const ctx    = canvas.getContext("2d");
+  const ctx = canvas.getContext("2d");
 
-  // Hintergrund
-  ctx.fillStyle = "#1e1f22";
+  ctx.fillStyle = "#0f172a";
   ctx.fillRect(0, 0, W, H);
 
-  // Daten vorbereiten – max. 60 Punkte
-  const sampled = sampleArray(history, 60);
-  const prices  = sampled.map((h) => h.current_bid ?? 0);
-  const times   = sampled.map((h) => h.recorded_at * 1000);
-
-  // Intelligente Min/Max (IQR Outlier-Filter)
-  const sorted = [...prices].sort((a, b) => a - b);
-  const q1 = sorted[Math.floor(sorted.length * 0.25)];
-  const q3 = sorted[Math.floor(sorted.length * 0.75)];
-  const iqr = q3 - q1;
-  const lowerBound = Math.max(0, q1 - 1.5 * iqr);
-  const upperBound = q3 + 1.5 * iqr;
-
-  let minP = upperBound, maxP = lowerBound;
-  for (const p of prices) {
-    if (p >= lowerBound && p <= upperBound) {
-      minP = Math.min(minP, p);
-      maxP = Math.max(maxP, p);
-    }
-  }
-  if (minP >= maxP) { minP = Math.min(...prices); maxP = Math.max(...prices); }
-
-  const range = maxP - minP || 1;
-  minP = Math.max(0, minP - range * 0.1);
-  maxP = maxP + range * 0.1;
-
-  const minT  = times[0];
-  const maxT  = times[times.length - 1];
   const chartW = W - PAD.left - PAD.right;
-  const chartH = H - PAD.top  - PAD.bottom;
+  const chartH = H - PAD.top - PAD.bottom;
 
-  const xPx = (t) => PAD.left + ((t - minT) / (maxT - minT || 1)) * chartW;
-  const yPx = (p) => {
-    const clamped = Math.max(minP, Math.min(maxP, p));
-    return PAD.top + (1 - (clamped - minP) / (maxP - minP)) * chartH;
-  };
+  const candles = history.slice(-40);
 
-  // Grid
-  const gridLines = 5;
-  ctx.strokeStyle = "#2e3035";
-  ctx.lineWidth   = 1;
-  ctx.setLineDash([4, 4]);
-  for (let i = 0; i <= gridLines; i++) {
-    const y = PAD.top + (i / gridLines) * chartH;
+  const max = Math.max(...candles.map(c => c.high));
+  const min = Math.min(...candles.map(c => c.low));
+  const range = max - min || 1;
+
+  const xStep = chartW / candles.length;
+
+  const xStep = chartW / (candles.length - 1 || 1);
+
+  const y = (v) =>
+    PAD.top + (1 - (v - min) / range) * chartH;
+
+  // GRID
+  ctx.strokeStyle = "#1f2937";
+  ctx.lineWidth = 1;
+
+  for (let i = 0; i < 6; i++) {
+    const yy = PAD.top + (i / 5) * chartH;
+
     ctx.beginPath();
-    ctx.moveTo(PAD.left, y);
-    ctx.lineTo(PAD.left + chartW, y);
+    ctx.moveTo(PAD.left, yy);
+    ctx.lineTo(PAD.left + chartW, yy);
     ctx.stroke();
   }
-  ctx.setLineDash([]);
 
-  // Y-Achse
-  ctx.fillStyle    = "#9a9a9a";
-  ctx.font         = "12px sans-serif";
-  ctx.textAlign    = "right";
-  ctx.textBaseline = "middle";
-  for (let i = 0; i <= gridLines; i++) {
-    const val = maxP - (i / gridLines) * (maxP - minP);
-    ctx.fillText(fmtShort(val) + " $", PAD.left - 8, PAD.top + (i / gridLines) * chartH);
-  }
-
-  // X-Achse Datum
-  ctx.textAlign    = "center";
-  ctx.textBaseline = "top";
-  ctx.fillStyle    = "#9a9a9a";
-  ctx.font         = "11px sans-serif";
-  const xTicks = Math.min(6, sampled.length);
-  for (let i = 0; i < xTicks; i++) {
-    const idx  = Math.round((i / Math.max(1, xTicks - 1)) * (sampled.length - 1));
-    const x    = xPx(times[idx]);
-    const date = new Date(times[idx]);
-    ctx.fillText(`${date.getDate()}.${String(date.getMonth() + 1).padStart(2, "0")}`, x, H - PAD.bottom + 12);
-  }
-
-  // Achsenbeschriftungen
-  ctx.fillStyle    = "#cccccc";
-  ctx.font         = "13px sans-serif";
-  ctx.textAlign    = "center";
-  ctx.textBaseline = "bottom";
-  ctx.fillText("Datum", W / 2, H - 4);
-  ctx.save();
-  ctx.translate(14, H / 2);
-  ctx.rotate(-Math.PI / 2);
-  ctx.textAlign    = "center";
-  ctx.textBaseline = "top";
-  ctx.fillText("Preis ($)", 0, 0);
-  ctx.restore();
-
-  // Titel
-  ctx.fillStyle    = "#ffffff";
-  ctx.font         = "bold 15px sans-serif";
-  ctx.textAlign    = "center";
-  ctx.textBaseline = "top";
-  ctx.fillText("Preisverlauf", W / 2, 14);
-
-  // Achsenlinien
-  ctx.strokeStyle = "#555";
-  ctx.lineWidth   = 1;
+  // AXIS
+  ctx.strokeStyle = "#374151";
   ctx.beginPath();
   ctx.moveTo(PAD.left, PAD.top);
   ctx.lineTo(PAD.left, PAD.top + chartH);
   ctx.lineTo(PAD.left + chartW, PAD.top + chartH);
   ctx.stroke();
 
-  // Gradient unter Linie
-  const grad = ctx.createLinearGradient(0, PAD.top, 0, PAD.top + chartH);
-  grad.addColorStop(0, "rgba(230, 184, 0, 0.25)");
-  grad.addColorStop(1, "rgba(230, 184, 0, 0.00)");
-  ctx.beginPath();
-  ctx.moveTo(xPx(times[0]), yPx(prices[0]));
-  for (let i = 1; i < sampled.length; i++) ctx.lineTo(xPx(times[i]), yPx(prices[i]));
-  ctx.lineTo(xPx(times[times.length - 1]), PAD.top + chartH);
-  ctx.lineTo(xPx(times[0]),                PAD.top + chartH);
-  ctx.closePath();
-  ctx.fillStyle = grad;
-  ctx.fill();
+  // CANDLES
+  candles.forEach((c, i) => {
+    const cx = x(i);
 
-  // Linie
-  ctx.strokeStyle = "#e6b800";
-  ctx.lineWidth   = 2.5;
-  ctx.lineJoin    = "round";
-  ctx.lineCap     = "round";
-  ctx.beginPath();
-  ctx.moveTo(xPx(times[0]), yPx(prices[0]));
-  for (let i = 1; i < sampled.length; i++) ctx.lineTo(xPx(times[i]), yPx(prices[i]));
-  ctx.stroke();
+    const openY = y(c.open);
+    const closeY = y(c.close);
+    const highY = y(c.high);
+    const lowY = y(c.low);
 
-  // Punkte
-  ctx.fillStyle = "#e6b800";
-  for (let i = 0; i < sampled.length; i++) {
+    const up = c.close >= c.open;
+
+    ctx.strokeStyle = up ? "#22c55e" : "#ef4444";
+    ctx.fillStyle = up ? "#22c55e" : "#ef4444";
+
+    // wick
     ctx.beginPath();
-    ctx.arc(xPx(times[i]), yPx(prices[i]), 3.5, 0, Math.PI * 2);
-    ctx.fill();
-  }
+    ctx.moveTo(cx, highY);
+    ctx.lineTo(cx, lowY);
+    ctx.stroke();
 
-  // Legende
-  const legendX = W - PAD.right - 150;
-  const legendY = PAD.top + 10;
-  ctx.strokeStyle = "#e6b800";
-  ctx.lineWidth   = 2;
-  ctx.beginPath();
-  ctx.moveTo(legendX, legendY + 6);
-  ctx.lineTo(legendX + 20, legendY + 6);
-  ctx.stroke();
-  ctx.fillStyle = "#e6b800";
-  ctx.beginPath();
-  ctx.arc(legendX + 10, legendY + 6, 3.5, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle    = "#cccccc";
-  ctx.font         = "12px sans-serif";
-  ctx.textAlign    = "left";
-  ctx.textBaseline = "middle";
-  ctx.fillText("Verkaufspreis ($)", legendX + 26, legendY + 6);
+    // body
+    const top = Math.min(openY, closeY);
+    const bodyH = Math.max(2, Math.abs(closeY - openY));
+
+    ctx.fillRect(
+      cx - 5,
+      Math.min(openY, closeY),
+      10,
+      bodyH
+    );
+  });
+
+  // TITLE
+  ctx.fillStyle = "#fff";
+  ctx.font = "bold 18px sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText(`${title} (Market Candles)`, W / 2, 25);
+
+  const last = candles[candles.length - 1];
+
+const lx = x(candles.length - 1);
+const ly = y(last.close);
+
+ctx.fillStyle = "#facc15";
+ctx.beginPath();
+ctx.arc(lx, ly, 6, 0, Math.PI * 2);
+ctx.fill();
 
   return canvas.toBuffer("image/png");
 }
