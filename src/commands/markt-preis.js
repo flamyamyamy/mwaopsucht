@@ -105,27 +105,27 @@ export async function execute(interaction) {
 
     // Description: visual price comparison
     const descLines = [];
-    if (buyPrice  != null) descLines.push(`🟢 **Kaufpreis:**  \`${fmt(buyPrice)}$\`  *(${buyOrders ?? "?"} Aufträge)*`);
-    if (sellPrice != null) descLines.push(`🔴 **Verkaufspreis:** \`${fmt(sellPrice)}$\`  *(${sellOrders ?? "?"} Aufträge)*`);
-    if (spread    != null) descLines.push(`↔️ **Spread:** \`${spread}$\``);
+    if (buyPrice  != null) descLines.push(`<:minecoin:1512068363864768602> **Kaufpreis:**  \`${fmt(buyPrice)}$\`  *(${buyOrders ?? "?"} Aufträge)*`);
+    if (sellPrice != null) descLines.push(`<:Redstone:1512068332122017822> **Verkaufspreis:** \`${fmt(sellPrice)}$\`  *(${sellOrders ?? "?"} Aufträge)*`);
+    if (spread    != null) descLines.push(`<:Arrow:1512067924117159947> **Spread:** \`${spread}$\``);
 
     embed.setDescription(descLines.join("\n"));
 
     // Fields: quick stats inline
-    if (buyPrice  != null) embed.addFields({ name: "💚 Kaufpreis",       value: `**${fmt(buyPrice)}$**`,   inline: true });
-    if (sellPrice != null) embed.addFields({ name: "❤️ Verkaufspreis",   value: `**${fmt(sellPrice)}$**`,  inline: true });
-    if (spread    != null) embed.addFields({ name: "↔️ Spread",          value: `**${spread}$**`,          inline: true });
-    if (buyOrders  != null) embed.addFields({ name: "📦 Kauf-Aufträge",  value: `${fmt(buyOrders)}`,       inline: true });
-    if (sellOrders != null) embed.addFields({ name: "📦 Verkauf-Aufträge", value: `${fmt(sellOrders)}`,    inline: true });
+    if (buyPrice  != null) embed.addFields({ name: "<:minecoin:1512068363864768602> Kaufpreis",       value: `**${fmt(buyPrice)}$**`,   inline: true });
+    if (sellPrice != null) embed.addFields({ name: "<:Redstone:1512068332122017822> Verkaufspreis",   value: `**${fmt(sellPrice)}$**`,  inline: true });
+    if (spread    != null) embed.addFields({ name: "<:Arrow:1512067924117159947> Spread",          value: `**${spread}$**`,          inline: true });
+    if (buyOrders  != null) embed.addFields({ name: "<:Chest:1512068394434570240> Kauf-Aufträge",  value: `${fmt(buyOrders)}`,       inline: true });
+    if (sellOrders != null) embed.addFields({ name: "<:Chest:1512068394434570240> Verkauf-Aufträge", value: `${fmt(sellOrders)}`,    inline: true });
 
   } else if (flat) {
     // ── Legacy flat format ────────────────────────────────────────────────────
-    if (flat.buyPrice  != null) embed.addFields({ name: "💚 Kaufpreis",      value: `${fmt(flat.buyPrice)}$`,  inline: true });
-    if (flat.sellPrice != null) embed.addFields({ name: "❤️ Verkaufspreis",  value: `${fmt(flat.sellPrice)}$`, inline: true });
-    if (flat.avgPrice  != null) embed.addFields({ name: "Ø Preis",           value: `${fmt(flat.avgPrice)}$`,  inline: true });
-    if (flat.minPrice  != null) embed.addFields({ name: "📉 Minimum",        value: `${fmt(flat.minPrice)}$`,  inline: true });
-    if (flat.maxPrice  != null) embed.addFields({ name: "📈 Maximum",        value: `${fmt(flat.maxPrice)}$`,  inline: true });
-    if (flat.volume    != null) embed.addFields({ name: "📊 Volumen",        value: fmt(flat.volume),          inline: true });
+    if (flat.buyPrice  != null) embed.addFields({ name: "<:minecoin:1512068363864768602> Kaufpreis",      value: `${fmt(flat.buyPrice)}$`,  inline: true });
+    if (flat.sellPrice != null) embed.addFields({ name: "<:Redstone:1512068332122017822> Verkaufspreis",  value: `${fmt(flat.sellPrice)}$`, inline: true });
+    if (flat.avgPrice  != null) embed.addFields({ name: "<:Arrow:1512067924117159947> Ø Preis",           value: `${fmt(flat.avgPrice)}$`,  inline: true });
+    if (flat.minPrice  != null) embed.addFields({ name: "<:Chart_Decrease:1512068424994570240> Minimum",        value: `${fmt(flat.minPrice)}$`,  inline: true });
+    if (flat.maxPrice  != null) embed.addFields({ name: "<:Chart_Increase:1512068453287570432> Maximum",        value: `${fmt(flat.maxPrice)}$`,  inline: true });
+    if (flat.volume    != null) embed.addFields({ name: "<:BarChart:1512068481580570624> Volumen",        value: fmt(flat.volume),          inline: true });
 
     if (!embed.data.fields?.length) {
       const raw = JSON.stringify(flat, null, 2).slice(0, 1000);

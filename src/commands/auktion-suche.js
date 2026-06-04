@@ -24,10 +24,10 @@ export const data = new SlashCommandBuilder()
   );
 
 const SORT_LABELS = {
-  asc:  "💰 Günstigste zuerst",
-  desc: "💎 Teuerste zuerst",
-  soon: "⏰ Endet bald",
-  bids: "🔥 Meiste Gebote",
+  asc:  "<:minecoin:1512068363864768602> Günstigste zuerst",
+  desc: "<:Emerald:1512068393061318728> Teuerste zuerst",
+  soon: "<a:Clock:1512068072075427841> Endet bald",
+  bids: "<:Fire_Charge:1512068044271386694> Meiste Gebote",
 };
 
 export async function execute(interaction) {
@@ -46,7 +46,7 @@ export async function execute(interaction) {
   if (results.length === 0) {
     const embed = new EmbedBuilder()
       .setColor(0xff4757)
-      .setTitle("🔍 Keine Ergebnisse")
+      .setTitle("<:Spyglass:1512068258956574751> Keine Ergebnisse")
       .setDescription(`Für **${query}** wurden keine aktiven Auktionen gefunden.`)
       .setFooter({ text: "OPSUCHT Auktionshaus" })
       .setTimestamp();
@@ -71,11 +71,11 @@ export async function execute(interaction) {
 
   const embed = new EmbedBuilder()
     .setColor(0xe6b800)
-    .setTitle(`🔍 Suchergebnisse: „${query}"`)
+    .setTitle(`<:Spyglass:1512068258956574751> Suchergebnisse: „${query}"`)
     .setDescription(
-      `> 📊 **${total}** Auktionen gefunden  •  Sortierung: ${SORT_LABELS[sort]}\n` +
-      `> 📉 Min: **${fmt(minBid)}$**  •  📈 Max: **${fmt(maxBid)}$**  •  Ø **${fmt(avgBid)}$**` +
-      (withBuyNow > 0 ? `  •  🛒 ${withBuyNow}x Sofortkauf` : "")
+      `> <:Book:1512074541638226021> **${total}** Auktionen gefunden  •  Sortierung: ${SORT_LABELS[sort]}\n` +
+      `> <:Stick:1512068203163943072> Min: **${fmt(minBid)}$**  •  <:Blaze_Rod:1512068287239032842> Max: **${fmt(maxBid)}$**  •  Ø **${fmt(avgBid)}$**` +
+      (withBuyNow > 0 ? `  •  <:Bundle:1512068142564904992> ${withBuyNow}x Sofortkauf` : "")
     )
     .setFooter({ text: `OPSUCHT Auktionshaus • ${results.length} von ${total} gezeigt` })
     .setTimestamp();
@@ -88,8 +88,8 @@ export async function execute(interaction) {
     const endsIn   = fmtRelative(a.endTime);
 
     const lines = [
-      `💰 Gebot: **${fmt(a.currentBid)}$**` + (a.instantBuyPrice ? `  •  🛒 Sofortkauf: **${fmt(a.instantBuyPrice)}$**` : ""),
-      `${hasBids ? "🔥" : "⏳"} Gebote: **${bidCount}**  •  ⏱️ Endet: **${endsIn}**`,
+      `💰 Gebot: **${fmt(a.currentBid)}$**` + (a.instantBuyPrice ? `  •  <:Bundle:1512068142564904992> Sofortkauf: **${fmt(a.instantBuyPrice)}$**` : ""),
+      `${hasBids ? "<:Fire_Charge:1512068044271386694>" : "⏳"} Gebote: **${bidCount}**  •  <a:Clock:1512068072075427841> Endet: **${endsIn}**`,
       `🆔 \`${a.uid}\``,
     ];
 

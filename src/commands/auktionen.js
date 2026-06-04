@@ -59,18 +59,18 @@ function buildEmbed(auctions, page, total, category, search) {
 
   // Description: filter indicators + stats bar
   const filterParts = [];
-  if (category) filterParts.push(`🗂️ **${category}**`);
-  if (search)   filterParts.push(`🔎 **${search}**`);
+  if (category) filterParts.push(`<:Bookshel:1512068009944944691> **${category}**`);
+  if (search)   filterParts.push(`<:Spyglass:1512068258956574751> **${search}**`);
   const filterLine = filterParts.length ? filterParts.join("  •  ") + "\n" : "";
 
   const statsLine =
     prices.length
-      ? `> 📉 Min: **${fmt(minBid)}$**  •  📈 Max: **${fmt(maxBid)}$**  •  🔥 ${withBids} aktive Gebote  •  🛒 ${withBuyNow}x Sofortkauf`
+      ? `> <:Stick:1512068203163943072> Min: **${fmt(minBid)}$**  •  <:Blaze_Rod:1512068287239032842> Max: **${fmt(maxBid)}$**  •  <:Fire_Charge:1512068044271386694> ${withBids} aktive Gebote  •  <:Bundle:1512068142564904992> ${withBuyNow}x Sofortkauf`
       : "";
 
   const embed = new EmbedBuilder()
     .setColor(0xe6b800)
-    .setTitle("🏷️ OPSUCHT — Auktionshaus")
+    .setTitle("<:Name_Tag:1512068231198806116> OPSUCHT — Auktionshaus")
     .setDescription(
       slice.length === 0
         ? "❌ Keine Auktionen gefunden."
@@ -90,8 +90,8 @@ function buildEmbed(auctions, page, total, category, search) {
     const hasBid    = bidCount > 0;
 
     const lines = [
-      `💰 Gebot: **${bid}$**` + (a.instantBuyPrice ? `  •  🛒 Sofortkauf: **${fmt(a.instantBuyPrice)}$**` : ""),
-      `${hasBid ? "🔥" : "⏳"} Gebote: **${bidCount}**  •  ⏱️ Endet: **${endsIn}**`,
+      `💰 Gebot: **${bid}$**` + (a.instantBuyPrice ? `  •  <:Bundle:1512068142564904992> Sofortkauf: **${fmt(a.instantBuyPrice)}$**` : ""),
+      `${hasBid ? "<:Fire_Charge:1512068044271386694>" : "⏳"} Gebote: **${bidCount}**  •  <a:Clock:1512068072075427841> Endet: **${endsIn}**`,
       `🆔 \`${a.uid}\``,
     ];
 
