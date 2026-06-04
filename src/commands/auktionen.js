@@ -46,42 +46,83 @@ export async function autocomplete(interaction) {
 }
 
 function buildEmbed(auctions, page, total, category, search) {
-  const start = page * PAGE_SIZE;
-  const slice = auctions.slice(start, start + PAGE_SIZE);
+  const start      = page * PAGE_SIZE;
+  const slice      = auctions.slice(start, start + PAGE_SIZE);
   const totalPages = Math.ceil(auctions.length / PAGE_SIZE);
+
+  // Quick stats over full result set
+  const prices       = auctions.map((a) => a.currentBid).filter(Boolean);
+  const minBid       = prices.length ? Math.min(...prices) : null;
+  const maxBid       = prices.length ? Math.max(...prices) : null;
+  const withBids     = auctions.filter((a) => Object.keys(a.bids ?? {}).length > 0).length;
+  const withBuyNow   = auctions.filter((a) => a.instantBuyPrice).length;
+
+  // Description: filter indicators + stats bar
+  const filterParts = [];
+  if (category) filterParts.push(`🗂️ **${category}**`);
+  if (search)   filterParts.push(`🔎 **${search}**`);
+  const filterLine = filterParts.length ? filterParts.join("  •  ") + "\n" : "";
+
+  const statsLine =
+    prices.length
+      ? `> 📉 Min: **${fmt(minBid)}$**  •  📈 Max: **${fmt(maxBid)}$**  •  🔥 ${withBids} aktive Gebote  •  🛒 ${withBuyNow}x Sofortkauf`
+      : "";
 
   const embed = new EmbedBuilder()
     .setColor(0xe6b800)
-    .setTitle("🏷️ OPSUCHT Auktionen")
+    .setTitle("🏷️ OPSUCHT — Auktionshaus")
+    .setDescription(
+      slice.length === 0
+        ? "❌ Keine Auktionen gefunden."
+        : filterLine + statsLine
+    )
     .setFooter({
-      text: `Seite ${page + 1}/${totalPages || 1} • ${total} Auktionen gesamt`,
+      text: `Seite ${page + 1}/${totalPages || 1}  •  ${total} Auktionen gesamt  •  OPSUCHT`,
     })
     .setTimestamp();
 
-  if (category) embed.setDescription(`Kategorie: **${category}**`);
-  if (search)   embed.setDescription((embed.data.description ?? "") + `  •  Suche: **${search}**`);
-
-  if (slice.length === 0) {
-    embed.setDescription("Keine Auktionen gefunden.");
-    return embed;
-  }
-
   for (const a of slice) {
-    const name   = a.item?.displayName || a.item?.material || "Unbekannt";
-    const amount = a.item?.amount ?? 1;
-    const bid    = fmt(a.currentBid);
-    const buyNow = a.instantBuyPrice ? ` | Sofortkauf: **${fmt(a.instantBuyPrice)}** 💰` : "";
-    const endsIn = fmtRelative(a.endTime);
-    const bidder = a.highestBidder ? "✅ Gebote vorhanden" : "⏳ Kein Gebot";
+    const name      = a.item?.displayName || a.item?.material || "Unbekannt";
+    const amount    = a.item?.amount ?? 1;
+    const bid       = fmt(a.currentBid);
+    const endsIn    = fmtRelative(a.endTime);
+    const bidCount  = Object.keys(a.bids ?? {}).length;
+    const hasBid    = bidCount > 0;
+
+    const lines = [
+      `💰 Gebot: **${bid}$**` + (a.instantBuyPrice ? `  •  🛒 Sofortkauf: **${fmt(a.instantBuyPrice)}$**` : ""),
+      `${hasBid ? "🔥" : "⏳"} Gebote: **${bidCount}**  •  ⏱️ Endet: **${endsIn}**`,
+      `🆔 \`${a.uid}\``,
+    ];
 
     embed.addFields({
       name: `${amount > 1 ? `${amount}x ` : ""}${name}`,
-      value: `Gebot: **${bid}** 💰${buyNow}\nEndet: ${endsIn} • ${bidder}\nID: \`${a.uid}\``,
+      value: lines.join("\n"),
       inline: false,
     });
   }
 
   return embed;
+}
+
+function buildRow(page, totalPages) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId("prev")
+      .setLabel("◀ Zurück")
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(page === 0),
+    new ButtonBuilder()
+      .setCustomId("page_info")
+      .setLabel(`${page + 1} / ${totalPages}`)
+      .setStyle(ButtonStyle.Primary)
+      .setDisabled(true),
+    new ButtonBuilder()
+      .setCustomId("next")
+      .setLabel("Weiter ▶")
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(page >= totalPages - 1)
+  );
 }
 
 export async function execute(interaction) {
@@ -92,7 +133,7 @@ export async function execute(interaction) {
 
   let auctions = await getActiveAuctions(categoryArg);
 
-  // get display name for category
+  // Resolve category display name
   let categoryName = categoryArg;
   if (categoryArg) {
     try {
@@ -108,31 +149,17 @@ export async function execute(interaction) {
     });
   }
 
-  // sort by endTime ascending (closest first)
+  // Sort by soonest ending first
   auctions.sort((a, b) => new Date(a.endTime) - new Date(b.endTime));
 
-  const total = auctions.length;
-  let page = 0;
+  const total      = auctions.length;
+  let   page       = 0;
   const totalPages = Math.ceil(total / PAGE_SIZE);
-
-  const buildRow = (p) =>
-    new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId("prev")
-        .setLabel("◀")
-        .setStyle(ButtonStyle.Secondary)
-        .setDisabled(p === 0),
-      new ButtonBuilder()
-        .setCustomId("next")
-        .setLabel("▶")
-        .setStyle(ButtonStyle.Secondary)
-        .setDisabled(p >= totalPages - 1)
-    );
 
   const embed = buildEmbed(auctions, page, total, categoryName, search);
   const reply = await interaction.editReply({
     embeds: [embed],
-    components: totalPages > 1 ? [buildRow(page)] : [],
+    components: totalPages > 1 ? [buildRow(page, totalPages)] : [],
   });
 
   if (totalPages <= 1) return;
@@ -147,7 +174,7 @@ export async function execute(interaction) {
     else if (i.customId === "next" && page < totalPages - 1) page++;
     await i.update({
       embeds: [buildEmbed(auctions, page, total, categoryName, search)],
-      components: [buildRow(page)],
+      components: [buildRow(page, totalPages)],
     });
   });
 

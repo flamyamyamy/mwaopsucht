@@ -23,6 +23,13 @@ export const data = new SlashCommandBuilder()
       )
   );
 
+const SORT_LABELS = {
+  asc:  "💰 Günstigste zuerst",
+  desc: "💎 Teuerste zuerst",
+  soon: "⏰ Endet bald",
+  bids: "🔥 Meiste Gebote",
+};
+
 export async function execute(interaction) {
   await interaction.deferReply();
 
@@ -37,7 +44,13 @@ export async function execute(interaction) {
   });
 
   if (results.length === 0) {
-    return interaction.editReply(`❌ Keine aktiven Auktionen für **${query}** gefunden.`);
+    const embed = new EmbedBuilder()
+      .setColor(0xff4757)
+      .setTitle("🔍 Keine Ergebnisse")
+      .setDescription(`Für **${query}** wurden keine aktiven Auktionen gefunden.`)
+      .setFooter({ text: "OPSUCHT Auktionshaus" })
+      .setTimestamp();
+    return interaction.editReply({ embeds: [embed] });
   }
 
   switch (sort) {
@@ -47,26 +60,42 @@ export async function execute(interaction) {
     default:     results.sort((a, b) => a.currentBid - b.currentBid);
   }
 
-  results = results.slice(0, 10);
+  const total   = results.length;
+  results       = results.slice(0, 8);
+
+  // Stats
+  const minBid   = Math.min(...results.map((a) => a.currentBid));
+  const maxBid   = Math.max(...results.map((a) => a.currentBid));
+  const avgBid   = Math.round(results.reduce((s, a) => s + a.currentBid, 0) / results.length);
+  const withBuyNow = results.filter((a) => a.instantBuyPrice).length;
 
   const embed = new EmbedBuilder()
     .setColor(0xe6b800)
-    .setTitle(`🔍 Auktionen für „${query}"`)
-    .setFooter({ text: `${results.length} Ergebnisse gezeigt` })
+    .setTitle(`🔍 Suchergebnisse: „${query}"`)
+    .setDescription(
+      `> 📊 **${total}** Auktionen gefunden  •  Sortierung: ${SORT_LABELS[sort]}\n` +
+      `> 📉 Min: **${fmt(minBid)}$**  •  📈 Max: **${fmt(maxBid)}$**  •  Ø **${fmt(avgBid)}$**` +
+      (withBuyNow > 0 ? `  •  🛒 ${withBuyNow}x Sofortkauf` : "")
+    )
+    .setFooter({ text: `OPSUCHT Auktionshaus • ${results.length} von ${total} gezeigt` })
     .setTimestamp();
 
   for (const a of results) {
-    const name   = a.item?.displayName || a.item?.material || "Unbekannt";
-    const amount = a.item?.amount ?? 1;
+    const name     = a.item?.displayName || a.item?.material || "Unbekannt";
+    const amount   = a.item?.amount ?? 1;
     const bidCount = Object.keys(a.bids ?? {}).length;
-    const buyNow   = a.instantBuyPrice ? ` | Sofortkauf: **${fmt(a.instantBuyPrice)}** 💰` : "";
+    const hasBids  = bidCount > 0;
+    const endsIn   = fmtRelative(a.endTime);
+
+    const lines = [
+      `💰 Gebot: **${fmt(a.currentBid)}$**` + (a.instantBuyPrice ? `  •  🛒 Sofortkauf: **${fmt(a.instantBuyPrice)}$**` : ""),
+      `${hasBids ? "🔥" : "⏳"} Gebote: **${bidCount}**  •  ⏱️ Endet: **${endsIn}**`,
+      `🆔 \`${a.uid}\``,
+    ];
 
     embed.addFields({
       name: `${amount > 1 ? `${amount}x ` : ""}${name}`,
-      value:
-        `Gebot: **${fmt(a.currentBid)}** 💰${buyNow}\n` +
-        `Gebote: ${bidCount} • Endet ${fmtRelative(a.endTime)}\n` +
-        `UID: \`${a.uid}\``,
+      value: lines.join("\n"),
       inline: false,
     });
   }
