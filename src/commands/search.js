@@ -103,7 +103,7 @@ export async function execute(interaction) {
   let chartAttachment = null;
   if (history.length >= 2) {
     try {
-      const buf   = renderChart(query, history);
+      const buf   = renderChart(query, history, stats, liveAuctions);
       // AttachmentBuilder wie in der alten Version – das ist der Fix für die Chart-Anzeige
       chartAttachment = new AttachmentBuilder(buf, { name: "preisverlauf.png" });
     } catch (err) {
@@ -141,7 +141,7 @@ export async function execute(interaction) {
     let newAttachment = null;
     if (newHistory.length >= 2) {
       try {
-        const buf    = renderChart(query, newHistory);
+        const buf    = renderChart(query, newHistory, newStats, liveAuctions);
         newAttachment = new AttachmentBuilder(buf, { name: "preisverlauf.png" });
       } catch (err) {
         console.error("[search] chart re-render error:", err);
@@ -177,71 +177,98 @@ export async function execute(interaction) {
   });
 }
 
-// ── Canvas Chart (TradingView Style) ───────────────────────────────────────────
+// ── Professional Canvas Chart (TradingView + Live Data) ─────────────────────────
 
-function renderChart(title, history) {
-  const W = 900, H = 450;
-
-  const PAD = { top: 50, right: 40, bottom: 70, left: 90 };
+function renderChart(title, history, stats, liveAuctions) {
+  const W = 1000, H = 500;
+  const PAD = { top: 70, right: 60, bottom: 90, left: 80 };
 
   const canvas = createCanvas(W, H);
   const ctx = canvas.getContext("2d");
 
-  // Background
-  ctx.fillStyle = "#0f172a";
+  // ── BACKGROUND & GRADIENT ──────────────────────────────────────────────
+  ctx.fillStyle = "#0a0e27";
+  ctx.fillRect(0, 0, W, H);
+
+  // Subtle gradient overlay
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, "rgba(20, 30, 60, 0.3)");
+  grad.addColorStop(1, "rgba(10, 14, 39, 0)");
+  ctx.fillStyle = grad;
   ctx.fillRect(0, 0, W, H);
 
   const chartW = W - PAD.left - PAD.right;
   const chartH = H - PAD.top - PAD.bottom;
 
-  const candles = history.slice(-40);
+  const candles = history.slice(-50);
 
   const max = Math.max(...candles.map(c => c.high));
   const min = Math.min(...candles.map(c => c.low));
   const range = max - min || 1;
 
   const xStep = chartW / candles.length;
-  const candleW = Math.max(3, xStep * 0.6); // 60% of slot width
+  const candleW = Math.max(2, xStep * 0.65);
 
-  const x = (i) => PAD.left + i * xStep;// center candle in slot
+  const x = (i) => PAD.left + i * xStep + xStep / 2;
+  const y = (v) => PAD.top + (1 - (v - min) / range) * chartH;
 
-  const y = (v) =>
-    PAD.top + (1 - (v - min) / range) * chartH;
-
-  // ── GRID (TradingView Style) ──────────────────────────────────────────
-  ctx.strokeStyle = "rgba(255,255,255,0.06)";
+  // ── PROFESSIONAL GRID ──────────────────────────────────────────────────
+  ctx.strokeStyle = "rgba(148, 163, 184, 0.08)";
   ctx.lineWidth = 1;
 
-  // Horizontal grid lines
-  for (let i = 0; i <= 6; i++) {
-    const yy = PAD.top + (i / 6) * chartH;
+  // Horizontal grid with labels
+  for (let i = 0; i <= 5; i++) {
+    const yy = PAD.top + (i / 5) * chartH;
+    const price = max - (i / 5) * range;
 
     ctx.beginPath();
     ctx.moveTo(PAD.left, yy);
     ctx.lineTo(PAD.left + chartW, yy);
     ctx.stroke();
+
+    // Price labels on right
+    ctx.fillStyle = "rgba(148, 163, 184, 0.6)";
+    ctx.font = "11px 'Segoe UI', sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText(fmt(Math.round(price)), PAD.left + chartW + 10, yy + 4);
   }
 
-  // Vertical grid lines
-  for (let i = 0; i <= 8; i++) {
-    const xx = PAD.left + (i / 8) * chartW;
-
+  // Vertical grid lines (lighter)
+  ctx.strokeStyle = "rgba(148, 163, 184, 0.03)";
+  for (let i = 0; i <= 10; i++) {
+    const xx = PAD.left + (i / 10) * chartW;
     ctx.beginPath();
     ctx.moveTo(xx, PAD.top);
     ctx.lineTo(xx, PAD.top + chartH);
     ctx.stroke();
   }
 
-  // ── AXIS ──────────────────────────────────────────────────────────────
-  ctx.strokeStyle = "#374151";
-  ctx.lineWidth = 1;
+  // ── AXIS LINES ─────────────────────────────────────────────────────────
+  ctx.strokeStyle = "rgba(148, 163, 184, 0.3)";
+  ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(PAD.left, PAD.top);
   ctx.lineTo(PAD.left, PAD.top + chartH);
   ctx.lineTo(PAD.left + chartW, PAD.top + chartH);
   ctx.stroke();
 
-  // ── CANDLES ───────────────────────────────────────────────────────────
+  // ── MOVING AVERAGES (OPTIONAL) ─────────────────────────────────────────
+  // Draw subtle trend line from first to last
+  if (candles.length >= 2) {
+    const firstY = y(candles[0].close);
+    const lastY = y(candles[candles.length - 1].close);
+
+    ctx.strokeStyle = "rgba(100, 116, 139, 0.2)";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 5]);
+    ctx.beginPath();
+    ctx.moveTo(x(0), firstY);
+    ctx.lineTo(x(candles.length - 1), lastY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // ── CANDLES (HIGH QUALITY) ─────────────────────────────────────────────
   candles.forEach((c, i) => {
     const cx = x(i);
 
@@ -252,52 +279,111 @@ function renderChart(title, history) {
 
     const up = c.close >= c.open;
 
-    // Wick (thin line)
-    ctx.strokeStyle = up ? "#22c55e" : "#ef4444";
-    ctx.lineWidth = 1;
+    const color = up ? "#10b981" : "#ef4444";
+    const wickColor = up ? "rgba(16, 185, 129, 0.7)" : "rgba(239, 68, 68, 0.7)";
 
+    // Wick (thin, transparent)
+    ctx.strokeStyle = wickColor;
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.moveTo(cx, highY);
     ctx.lineTo(cx, lowY);
     ctx.stroke();
 
-    // Body
+    // Body (solid)
     const bodyTop = Math.min(openY, closeY);
-    const bodyH = Math.max(1, Math.abs(closeY - openY));
+    const bodyH = Math.max(1.5, Math.abs(closeY - openY));
 
-    ctx.fillStyle = up ? "#22c55e" : "#ef4444";
+    ctx.fillStyle = color;
+    ctx.globalAlpha = 0.9;
+    ctx.fillRect(cx - candleW / 2, bodyTop, candleW, bodyH);
+    ctx.globalAlpha = 1;
 
-    ctx.fillRect(
-      cx - candleW / 2,
-      bodyTop,
-      candleW,
-      bodyH
-    );
+    // Optional: Border for better definition
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 0.5;
+    ctx.strokeRect(cx - candleW / 2, bodyTop, candleW, bodyH);
   });
 
-  // ── TITLE ─────────────────────────────────────────────────────────────
-  ctx.fillStyle = "#fff";
-  ctx.font = "bold 18px sans-serif";
-  ctx.textAlign = "center";
-  ctx.fillText(`${title} (Market Candles)`, W / 2, 25);
+  // ── LIVE DATA INDICATOR ────────────────────────────────────────────────
+  if (liveAuctions.length > 0) {
+    const currentPrice = liveAuctions[0]?.currentBid || stats.lastPrice;
+    if (currentPrice != null) {
+      const liveY = y(currentPrice);
 
-  // ── LAST PRICE INDICATOR ──────────────────────────────────────────────
-  const last = candles.at(-1);
-  if (!last) return canvas.toBuffer("image/png");
+      // Horizontal line across chart
+      ctx.strokeStyle = "rgba(59, 130, 246, 0.25)";
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.moveTo(PAD.left, liveY);
+      ctx.lineTo(PAD.left + chartW, liveY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Live label on left
+      ctx.fillStyle = "#3b82f6";
+      ctx.font = "bold 12px 'Segoe UI', sans-serif";
+      ctx.textAlign = "right";
+      ctx.fillText("● LIVE: " + fmt(currentPrice) + "$", PAD.left - 10, liveY + 5);
+    }
+  }
+
+  // ── LAST CANDLE HIGHLIGHT ──────────────────────────────────────────────
+  const last = candles[candles.length - 1];
   const lx = x(candles.length - 1);
   const ly = y(last.close);
 
-  // Glow effect (subtle highlight)
-  ctx.fillStyle = "rgba(250, 204, 21, 0.15)";
+  // Outer glow
+  ctx.fillStyle = "rgba(250, 204, 21, 0.2)";
   ctx.beginPath();
-  ctx.arc(lx, ly, 12, 0, Math.PI * 2);
+  ctx.arc(lx, ly, 14, 0, Math.PI * 2);
   ctx.fill();
 
-  // Solid dot for last close
+  // Inner glow
+  ctx.fillStyle = "rgba(250, 204, 21, 0.4)";
+  ctx.beginPath();
+  ctx.arc(lx, ly, 8, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Solid dot
   ctx.fillStyle = "#facc15";
   ctx.beginPath();
-  ctx.arc(lx, ly, 5, 0, Math.PI * 2);
+  ctx.arc(lx, ly, 4, 0, Math.PI * 2);
   ctx.fill();
+
+  // ── TITLE & INFO ───────────────────────────────────────────────────────
+  ctx.fillStyle = "#f8fafc";
+  ctx.font = "bold 22px 'Segoe UI', sans-serif";
+  ctx.textAlign = "left";
+  ctx.fillText(`📊 ${title}`, PAD.left, 30);
+
+  // Stats badge
+  const change = stats.lastPrice != null && stats.avg7d != null 
+    ? ((stats.lastPrice - stats.avg7d) / stats.avg7d * 100).toFixed(1)
+    : 0;
+  const changeColor = change >= 0 ? "#10b981" : "#ef4444";
+  const changeStr = change >= 0 ? `↑ +${change}%` : `↓ ${change}%`;
+
+  ctx.fillStyle = changeColor;
+  ctx.font = "bold 14px 'Segoe UI', sans-serif";
+  ctx.textAlign = "right";
+  ctx.fillText(changeStr, W - PAD.right, 30);
+
+  // ── BOTTOM STATS ───────────────────────────────────────────────────────
+  ctx.fillStyle = "rgba(148, 163, 184, 0.8)";
+  ctx.font = "11px 'Segoe UI', sans-serif";
+  ctx.textAlign = "left";
+
+  const statsText = `High: ${fmt(max)}$ | Low: ${fmt(min)}$ | Avg: ${fmt((max + min) / 2)}$ | Range: ${candles.length} candles`;
+  ctx.fillText(statsText, PAD.left, H - 10);
+
+  // ── TIME RANGE LABEL ───────────────────────────────────────────────────
+  ctx.fillStyle = "rgba(148, 163, 184, 0.6)";
+  ctx.font = "10px 'Segoe UI', sans-serif";
+  ctx.textAlign = "right";
+  const now = new Date();
+  ctx.fillText(`Updated: ${now.toLocaleTimeString()}`, W - PAD.right, H - 10);
 
   return canvas.toBuffer("image/png");
 }
@@ -309,8 +395,8 @@ function buildContainer(query, days, stats, liveAuctions, fetchError, hasChart, 
   const reliability = getReliability(stats.totalCount);
   const lines       = [];
 
-  if (stats.marketValue != null)
-    lines.push(`<:minecoins:1512068363864768602> **Marktwert:** ${fmt(stats.marketValue)}$`);
+  if (stats.lastPrice != null)
+    lines.push(`<:minecoins:1512068363864768602> **Marktwert:** ${fmt(stats.lastPrice)}$`);
   if (stats.lastPrice != null)
     lines.push(`<:Emerad:1512068393061318728> **Letzter Preis:** ${fmt(stats.lastPrice)}$`);
   if (stats.avg7d != null)
