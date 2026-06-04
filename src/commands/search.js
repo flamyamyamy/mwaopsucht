@@ -5,7 +5,7 @@ import {
   StringSelectMenuBuilder,
   AttachmentBuilder,
 } from "discord.js";
-import { createCanvas } from "@napi-rs/canvas";
+import { createCanvas, loadImage } from "@napi-rs/canvas";
 import { getActiveAuctions, fmt, fmtRelative } from "../utils/api.js";
 import {
   saveAuctions,
@@ -16,10 +16,10 @@ import {
   countSnapshots,
 } from "../utils/db.js";
 
-// ── Slash-Command Definition ──────────────────────────────────────────────────
+// ── Slash-Command Definition (v2 Components) ──────────────────────────────────
 
 export const data = new SlashCommandBuilder()
-  .setName("item-search")
+  .setName("search")
   .setDescription("Sucht ein Item im AH – mit Preisverlauf & Marktstatistiken aus der DB")
   .addStringOption((opt) =>
     opt
@@ -84,30 +84,42 @@ export async function execute(interaction) {
   const stats   = getItemStats(query, days);
   const history = getPriceHistory(query, days);
 
-  // ── 3) Chart generieren ───────────────────────────────────────────────────
+  // ── 3) Item-Icon holen ────────────────────────────────────────────────────
+  let itemIcon = null;
+  try {
+    const firstAuction = liveAuctions[0];
+    const material = firstAuction?.item?.material || stats.lastMaterial;
+    if (material) {
+      itemIcon = getItemIconUrl(material);
+    }
+  } catch (err) {
+    console.error("[search] icon fetch error:", err);
+  }
+
+  // ── 4) Chart generieren ───────────────────────────────────────────────────
   let chartAttachment = null;
   if (history.length >= 2) {
     try {
-      const chartBuffer  = renderChart(query, history);
+      const chartBuffer  = renderChart(query, history, itemIcon);
       chartAttachment    = new AttachmentBuilder(chartBuffer, { name: "preisverlauf.png" });
     } catch (err) {
       console.error("[search] chart render error:", err);
     }
   }
 
-  // ── 4) Embed bauen & senden ───────────────────────────────────────────────
+  // ── 5) Embed bauen & senden (v2 Components) ───────────────────────────────
   const embed     = buildEmbed(query, days, stats, history, liveAuctions, fetchError, !!chartAttachment);
-  const selectRow = buildSelectRow(query, days);
+  const actionRow = buildActionRow(query, days);
 
   const replyOptions = {
     embeds: [embed],
-    components: [selectRow],
+    components: [actionRow],
   };
   if (chartAttachment) replyOptions.files = [chartAttachment];
 
   const reply = await interaction.editReply(replyOptions);
 
-  // ── 5) Select-Menu Collector (3 min) ─────────────────────────────────────
+  // ── 6) Select-Menu Collector (3 min) ──────────────────────────────────────
   const collector = reply.createMessageComponentCollector({
     filter: (i) =>
       i.user.id === interaction.user.id &&
@@ -125,7 +137,7 @@ export async function execute(interaction) {
     let newAttachment = null;
     if (newHistory.length >= 2) {
       try {
-        const buf    = renderChart(query, newHistory);
+        const buf    = renderChart(query, newHistory, itemIcon);
         newAttachment = new AttachmentBuilder(buf, { name: "preisverlauf.png" });
       } catch (err) {
         console.error("[search] chart re-render error:", err);
@@ -135,7 +147,7 @@ export async function execute(interaction) {
     const newEmbed   = buildEmbed(query, newDays, newStats, newHistory, liveAuctions, fetchError, !!newAttachment);
     const updateOpts = {
       embeds: [newEmbed],
-      components: [buildSelectRow(query, newDays)],
+      components: [buildActionRow(query, newDays)],
     };
     if (newAttachment) updateOpts.files = [newAttachment];
     else               updateOpts.files = [];
@@ -148,14 +160,14 @@ export async function execute(interaction) {
   });
 }
 
-// ── Canvas Chart ──────────────────────────────────────────────────────────────
+// ── Canvas Chart mit Item-Icon oben rechts ─────────────────────────────────────
 
 /**
- * Rendert einen Preisverlauf-Chart im Stil des Screenshots:
- * dunkler Hintergrund, orangene Linie mit Punkten, Grid, Datum auf X-Achse.
+ * Rendert einen Preisverlauf-Chart mit Item-Icon in der Top-Right.
+ * Dunkler Hintergrund, orangene Linie mit Punkten, Grid, Datum auf X-Achse.
  * Gibt einen PNG-Buffer zurück.
  */
-function renderChart(title, history) {
+function renderChart(title, history, iconUrl) {
   const W = 800, H = 400;
   const PAD = { top: 50, right: 30, bottom: 60, left: 90 };
 
@@ -311,10 +323,28 @@ function renderChart(title, history) {
   ctx.textBaseline = "middle";
   ctx.fillText("Verkaufspreis ($)", legendX + 26, legendY + 6);
 
+  // ── Item-Icon oben rechts (asynchron laden) ───────────────────────────────
+  if (iconUrl) {
+    try {
+      const img = loadImage(iconUrl);
+      const iconSize = 40;
+      const iconX = W - PAD.right - iconSize - 8;
+      const iconY = PAD.top + 6;
+      
+      // Icon mit Rahmen
+      ctx.strokeStyle = "#e6b800";
+      ctx.lineWidth   = 2;
+      ctx.strokeRect(iconX, iconY, iconSize, iconSize);
+      ctx.drawImage(img, iconX, iconY, iconSize, iconSize);
+    } catch (err) {
+      console.error("[chart] icon render error:", err);
+    }
+  }
+
   return canvas.toBuffer("image/png");
 }
 
-// ── Embed ─────────────────────────────────────────────────────────────────────
+// ── Embed (v2) ────────────────────────────────────────────────────────────────
 
 function buildEmbed(query, days, stats, history, liveAuctions, fetchError, hasChart) {
   const embed = new EmbedBuilder()
@@ -396,7 +426,11 @@ function buildEmbed(query, days, stats, history, liveAuctions, fetchError, hasCh
   return embed;
 }
 
-function buildSelectRow(query, days) {
+/**
+ * Erstellt Action Row mit StringSelectMenu (v2 Components).
+ * CustomId: search_period:<itemname>
+ */
+function buildActionRow(query, days) {
   return new ActionRowBuilder().addComponents(
     new StringSelectMenuBuilder()
       .setCustomId(`search_period:${query}`)
@@ -411,6 +445,20 @@ function buildSelectRow(query, days) {
 }
 
 // ── Utils ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Erstellt eine URL zum Minecraft Item-Icon basierend auf Material.
+ * Nutzt Minecraft Wiki Render-Service.
+ */
+function getItemIconUrl(material) {
+  if (!material) return null;
+  
+  // Normalisiere material name (z.B. "DIAMOND" → "diamond")
+  const normalized = material.toLowerCase().replace(/minecraft:/, "");
+  
+  // Minecraft Head Render Service (alternative: crafting.tools, etc.)
+  return `https://api.crafthead.net/v1/item/minecraft:${normalized}?format=png&size=64`;
+}
 
 /** Gleichmäßiges Downsampling eines Arrays auf maximal `n` Einträge */
 function sampleArray(arr, n) {
