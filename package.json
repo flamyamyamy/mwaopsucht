@@ -9,6 +9,8 @@
     "deploy": "node src/deploy.js"
   },
   "dependencies": {
+    "@napi-rs/canvas": "^0.1.53",
+    "better-sqlite3": "^9.2.2",
     "discord.js": "^14.26.0",
     "dotenv": "^17.3.1",
     "node-fetch": "^3.3.2"
