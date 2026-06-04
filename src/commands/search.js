@@ -189,21 +189,21 @@ function renderChart(title, history) {
   ctx.fillStyle = "#0f172a";
   ctx.fillRect(0, 0, W, H);
 
-  const chartW = W - PAD.left - PAD.right;
-  const chartH = H - PAD.top - PAD.bottom;
+const chartW = W - PAD.left - PAD.right;
+const chartH = H - PAD.top - PAD.bottom;
 
-  const candles = history.slice(-40);
+const candles = history.slice(-40);
 
-  const max = Math.max(...candles.map(c => c.high));
-  const min = Math.min(...candles.map(c => c.low));
-  const range = max - min || 1;
+const max = Math.max(...candles.map(c => c.high));
+const min = Math.min(...candles.map(c => c.low));
+const range = max - min || 1;
 
-  const xStep = chartW / candles.length;
+const xStep = chartW / candles.length; // ← nur hier!
 
-  const xStep = chartW / (candles.length - 1 || 1);
+const x = (i) => PAD.left + i * xStep;
 
-  const y = (v) =>
-    PAD.top + (1 - (v - min) / range) * chartH;
+const y = (v) =>
+  PAD.top + (1 - (v - min) / range) * chartH;
 
   // GRID
   ctx.strokeStyle = "#1f2937";
