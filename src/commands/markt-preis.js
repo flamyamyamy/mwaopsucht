@@ -115,8 +115,8 @@ export async function execute(interaction) {
     if (buyPrice  != null) embed.addFields({ name: "<:minecoin:1512068363864768602> Kaufpreis",       value: `**${fmt(buyPrice)}$**`,   inline: true });
     if (sellPrice != null) embed.addFields({ name: "<:Redstone:1512068332122017822> Verkaufspreis",   value: `**${fmt(sellPrice)}$**`,  inline: true });
     if (spread    != null) embed.addFields({ name: "<:Arrow:1512067924117159947> Spread",          value: `**${spread}$**`,          inline: true });
-    if (buyOrders  != null) embed.addFields({ name: "<:Chest:1512068394434570240> Kauf-Aufträge",  value: `${fmt(buyOrders)}`,       inline: true });
-    if (sellOrders != null) embed.addFields({ name: "<:Chest:1512068394434570240> Verkauf-Aufträge", value: `${fmt(sellOrders)}`,    inline: true });
+    if (buyOrders  != null) embed.addFields({ name: "<a:chest:1512077870481145939> Kauf-Aufträge",  value: `${fmt(buyOrders)}`,       inline: true });
+    if (sellOrders != null) embed.addFields({ name: "<a:chest:1512077870481145939> Verkauf-Aufträge", value: `${fmt(sellOrders)}`,    inline: true });
 
   } else if (flat) {
     // ── Legacy flat format ────────────────────────────────────────────────────
