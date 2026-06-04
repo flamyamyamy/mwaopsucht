@@ -35,6 +35,35 @@ export async function autocomplete(interaction) {
   }
 }
 
+/**
+ * Parse the API response format:
+ * { "AMETHYST_SHARD": [ { orderSide: "BUY", activeOrders: 266, price: 3.9 }, ... ] }
+ * Returns { buy, sell } or falls back to legacy field names.
+ */
+function parseOrders(material, raw) {
+  // New format: object keyed by material
+  const entries = raw?.[material] ?? raw?.[material.toLowerCase()];
+  if (Array.isArray(entries)) {
+    const buy  = entries.find((e) => e.orderSide === "BUY");
+    const sell = entries.find((e) => e.orderSide === "SELL");
+    return { buy, sell, isNewFormat: true };
+  }
+
+  // Legacy flat format
+  const flat = Array.isArray(raw) ? raw[0] : raw;
+  return { flat, isNewFormat: false };
+}
+
+/**
+ * Returns a URL to the Minecraft item icon via mc-heads or a fallback CDN.
+ * Using minecraft-ids.grahamedgecombe.com image assets as fallback.
+ */
+function itemIconUrl(material) {
+  // Normalize: AMETHYST_SHARD -> amethyst_shard
+  const name = material.toLowerCase().replace(/^minecraft:/, "");
+  return `https://mc-heads.net/head/${encodeURIComponent(name)}/64`;
+}
+
 export async function execute(interaction) {
   await interaction.deferReply();
 
@@ -53,43 +82,81 @@ export async function execute(interaction) {
     historyData = [];
   }
 
-  // Parse price data – API returns array or object depending on endpoint
-  const prices = Array.isArray(priceData) ? priceData : [priceData];
-  const current = prices[0] ?? priceData;
+  const { buy, sell, flat, isNewFormat } = parseOrders(material, priceData);
+  const displayName = prettyMaterial(material);
 
   const embed = new EmbedBuilder()
     .setColor(0x57f287)
-    .setTitle(`📈 Marktpreis: ${prettyMaterial(material)}`)
+    .setTitle(`📈 Marktpreis: ${displayName}`)
+    .setThumbnail(itemIconUrl(material))
     .setTimestamp();
 
-  // Current price fields
-  if (current.buyPrice  != null) embed.addFields({ name: "Kaufpreis",     value: `${fmt(current.buyPrice)} 💰`,  inline: true });
-  if (current.sellPrice != null) embed.addFields({ name: "Verkaufspreis", value: `${fmt(current.sellPrice)} 💰`, inline: true });
-  if (current.avgPrice  != null) embed.addFields({ name: "Ø Preis",       value: `${fmt(current.avgPrice)} 💰`,  inline: true });
-  if (current.minPrice  != null) embed.addFields({ name: "Minimum",       value: `${fmt(current.minPrice)} 💰`,  inline: true });
-  if (current.maxPrice  != null) embed.addFields({ name: "Maximum",       value: `${fmt(current.maxPrice)} 💰`,  inline: true });
-  if (current.volume    != null) embed.addFields({ name: "Volumen",       value: fmt(current.volume),            inline: true });
+  if (isNewFormat) {
+    // ── New orderSide format ──────────────────────────────────────────────────
+    const buyPrice   = buy?.price;
+    const sellPrice  = sell?.price;
+    const buyOrders  = buy?.activeOrders;
+    const sellOrders = sell?.activeOrders;
 
-  // Raw fallback if none of the above matched
-  if (!embed.data.fields?.length) {
-    const raw = JSON.stringify(current, null, 2).slice(0, 1000);
-    embed.setDescription(`\`\`\`json\n${raw}\n\`\`\``);
+    // Spread / margin
+    const spread = (buyPrice != null && sellPrice != null)
+      ? Math.abs(buyPrice - sellPrice).toFixed(2)
+      : null;
+
+    // Description: visual price comparison
+    const descLines = [];
+    if (buyPrice  != null) descLines.push(`🟢 **Kaufpreis:**  \`${fmt(buyPrice)}$\`  *(${buyOrders ?? "?"} Aufträge)*`);
+    if (sellPrice != null) descLines.push(`🔴 **Verkaufspreis:** \`${fmt(sellPrice)}$\`  *(${sellOrders ?? "?"} Aufträge)*`);
+    if (spread    != null) descLines.push(`↔️ **Spread:** \`${spread}$\``);
+
+    embed.setDescription(descLines.join("\n"));
+
+    // Fields: quick stats inline
+    if (buyPrice  != null) embed.addFields({ name: "💚 Kaufpreis",       value: `**${fmt(buyPrice)}$**`,   inline: true });
+    if (sellPrice != null) embed.addFields({ name: "❤️ Verkaufspreis",   value: `**${fmt(sellPrice)}$**`,  inline: true });
+    if (spread    != null) embed.addFields({ name: "↔️ Spread",          value: `**${spread}$**`,          inline: true });
+    if (buyOrders  != null) embed.addFields({ name: "📦 Kauf-Aufträge",  value: `${fmt(buyOrders)}`,       inline: true });
+    if (sellOrders != null) embed.addFields({ name: "📦 Verkauf-Aufträge", value: `${fmt(sellOrders)}`,    inline: true });
+
+  } else if (flat) {
+    // ── Legacy flat format ────────────────────────────────────────────────────
+    if (flat.buyPrice  != null) embed.addFields({ name: "💚 Kaufpreis",      value: `${fmt(flat.buyPrice)}$`,  inline: true });
+    if (flat.sellPrice != null) embed.addFields({ name: "❤️ Verkaufspreis",  value: `${fmt(flat.sellPrice)}$`, inline: true });
+    if (flat.avgPrice  != null) embed.addFields({ name: "Ø Preis",           value: `${fmt(flat.avgPrice)}$`,  inline: true });
+    if (flat.minPrice  != null) embed.addFields({ name: "📉 Minimum",        value: `${fmt(flat.minPrice)}$`,  inline: true });
+    if (flat.maxPrice  != null) embed.addFields({ name: "📈 Maximum",        value: `${fmt(flat.maxPrice)}$`,  inline: true });
+    if (flat.volume    != null) embed.addFields({ name: "📊 Volumen",        value: fmt(flat.volume),          inline: true });
+
+    if (!embed.data.fields?.length) {
+      const raw = JSON.stringify(flat, null, 2).slice(0, 1000);
+      embed.setDescription(`\`\`\`json\n${raw}\n\`\`\``);
+    }
   }
 
-  // History (last 5 entries)
-  const hist = Array.isArray(historyData) ? historyData.slice(-5) : [];
+  // ── Price history (last 7 entries) ─────────────────────────────────────────
+  const hist = Array.isArray(historyData) ? historyData.slice(-7) : [];
   if (hist.length > 0) {
+    const prices = hist.map((h) => h.avgPrice ?? h.price ?? h.sellPrice ?? 0);
+    const maxP   = Math.max(...prices);
+    const minP   = Math.min(...prices);
+    const BARS   = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"];
+
     const histText = hist
       .map((h) => {
-        const date = h.date ? new Date(h.date).toLocaleDateString("de-DE") : "–";
-        const price = h.avgPrice ?? h.price ?? "–";
-        return `${date}: **${fmt(price)}** 💰`;
+        const p    = h.avgPrice ?? h.price ?? h.sellPrice ?? 0;
+        const date = h.date
+          ? new Date(h.date).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })
+          : "??";
+        const norm = maxP === minP ? 1 : (p - minP) / (maxP - minP);
+        const bar  = BARS[Math.round(norm * (BARS.length - 1))];
+        return `${bar} ${date}  **${fmt(p)}$**`;
       })
       .join("\n");
-    embed.addFields({ name: "📊 Preisverlauf (letzte 5)", value: histText, inline: false });
+
+    embed.addFields({ name: "📊 Preisverlauf (letzte 7 Tage)", value: histText, inline: false });
   }
 
-  embed.setFooter({ text: `Material: ${material}` });
+  embed.setFooter({ text: `Material: ${material}  •  OPSUCHT Markt` });
 
   await interaction.editReply({ embeds: [embed] });
 }
