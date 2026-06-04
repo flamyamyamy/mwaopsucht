@@ -467,16 +467,27 @@ function buildActionRow(query, days) {
 
 /**
  * Erstellt eine URL zum Minecraft Item-Icon basierend auf Material.
- * Nutzt Minecraft Head Render Service.
+ * Nutzt mcasset.cloud für direkte Asset-PNGs.
+ * 
+ * Material-Namen müssen in Minecraft-Format sein (lowercase_with_underscores).
+ * z.B. "DIAMOND" → "diamond", "WOODEN_PICKAXE" → "wooden_pickaxe"
  */
 function getItemIconUrl(material) {
   if (!material) return null;
   
-  // Normalisiere material name (z.B. "DIAMOND" → "diamond")
-  const normalized = material.toLowerCase().replace(/minecraft:/, "");
+  // Normalisiere material name
+  // Entferne "minecraft:" prefix falls vorhanden
+  let normalized = material.toLowerCase().replace(/minecraft:/, "");
   
-  // Minecraft Render Service für Items
-  return `https://api.crafthead.net/v1/item/minecraft:${normalized}?format=png&size=64`;
+  // Falls es UPPERCASE_WITH_UNDERSCORES ist, ist es schon ok
+  // Sonst versuchen wir es zu konvertieren
+  if (normalized.includes(" ")) {
+    normalized = normalized.replace(/ /g, "_");
+  }
+  
+  // mcasset.cloud gibt es für verschiedene Versionen
+  // Wir nutzen 1.20.1 (aktuell stabil)
+  return `https://mcasset.cloud/1.20.1/items/${normalized}.png`;
 }
 
 /** Gleichmäßiges Downsampling eines Arrays auf maximal `n` Einträge */
