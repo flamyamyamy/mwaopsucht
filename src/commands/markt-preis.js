@@ -55,15 +55,15 @@ function parseOrders(material, raw) {
 }
 
 /**
- * Returns a URL to the Minecraft block texture via mcasset.cloud.
- * Material names in Minecraft format (e.g., AMETHYST_SHARD -> amethyst_shard)
+ * Returns a URL to the Minecraft block texture via mc-api.io.
+ * Material names in Minecraft format (e.g., NETHERITE_AXE -> netherite_axe)
  */
 function itemIconUrl(material) {
-  // Normalize: AMETHYST_SHARD -> amethyst_shard
+  // Normalize: NETHERITE_AXE -> netherite_axe
   const name = material.toLowerCase().replace(/^minecraft:/, "");
   
-  // mcasset.cloud provides direct PNG links to Minecraft block/item textures
-  return `https://mcasset.cloud/1.20.1/items/${name}.png`;
+  // mc-api.io provides direct PNG links to Minecraft item textures
+  return `https://img.mc-api.io/${name}.png`;
 }
 
 export async function execute(interaction) {
@@ -122,11 +122,11 @@ export async function execute(interaction) {
 
   } else if (flat) {
     // ── Legacy flat format ────────────────────────────────────────────────────
-    if (flat.buyPrice  != null) embed.addFields({ name: "<:minecoin:1512068363864768602> Kaufpreis",      value: `${fmt(flat.buyPrice)}$`,  inline: true });
-    if (flat.sellPrice != null) embed.addFields({ name: "<:Redstone:1512068332122017822> Verkaufspreis",  value: `${fmt(flat.sellPrice)}$`, inline: true });
+    if (flat.buyPrice  != null) embed.addFields({ name: "<:minecoin:1512068363864768602> Kaufpreis",       value: `${fmt(flat.buyPrice)}$`,  inline: true });
+    if (flat.sellPrice != null) embed.addFields({ name: "<:Redstone:1512068332122017822> Verkaufspreis",   value: `${fmt(flat.sellPrice)}$`, inline: true });
     if (flat.avgPrice  != null) embed.addFields({ name: "<:Arrow:1512067924117159947> Ø Preis",           value: `${fmt(flat.avgPrice)}$`,  inline: true });
-    if (flat.minPrice  != null) embed.addFields({ name: "<:Chart_Decrease:1512068424994570240> Minimum",        value: `${fmt(flat.minPrice)}$`,  inline: true });
-    if (flat.maxPrice  != null) embed.addFields({ name: "<:Chart_Increase:1512068453287570432> Maximum",        value: `${fmt(flat.maxPrice)}$`,  inline: true });
+    if (flat.minPrice  != null) embed.addFields({ name: "<:Chart_Decrease:1512068424994570240> Minimum",   value: `${fmt(flat.minPrice)}$`,  inline: true });
+    if (flat.maxPrice  != null) embed.addFields({ name: "<:Chart_Increase:1512068453287570432> Maximum",   value: `${fmt(flat.maxPrice)}$`,  inline: true });
     if (flat.volume    != null) embed.addFields({ name: "<:BarChart:1512068481580570624> Volumen",        value: fmt(flat.volume),          inline: true });
 
     if (!embed.data.fields?.length) {
