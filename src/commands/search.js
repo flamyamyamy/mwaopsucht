@@ -3,6 +3,8 @@ import {
   ContainerBuilder,
   TextDisplayBuilder,
   SeparatorBuilder,
+  MediaGalleryBuilder,
+  MediaGalleryItemBuilder,
   ActionRowBuilder,
   StringSelectMenuBuilder,
   AttachmentBuilder,
@@ -379,11 +381,16 @@ function buildContainer(query, days, stats, liveAuctions, fetchError, hasChart, 
   );
 
   // ── Chart ────────────────────────────────────────────────────────────────
-  // Die Chart wird als Attachment mitgesendet und per attachment:// referenziert
+  // MediaGallery ist der korrekte Weg um Bilder in Containern anzuzeigen
   if (hasChart) {
     container.addSeparatorComponents(new SeparatorBuilder());
     container.addTextDisplayComponents(
-      new TextDisplayBuilder().setContent("## 📊 Preisverlauf\nattachment://preisverlauf.png")
+      new TextDisplayBuilder().setContent("## 📊 Preisverlauf")
+    );
+    container.addMediaGalleryComponents(
+      new MediaGalleryBuilder().addItems(
+        new MediaGalleryItemBuilder().setURL("attachment://preisverlauf.png")
+      )
     );
   }
 
