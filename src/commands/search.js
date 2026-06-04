@@ -177,7 +177,7 @@ export async function execute(interaction) {
   });
 }
 
-// ── Canvas Chart ───────────────────────────────────────────────────────────────
+// ── Canvas Chart (TradingView Style) ───────────────────────────────────────────
 
 function renderChart(title, history) {
   const W = 900, H = 450;
@@ -187,6 +187,7 @@ function renderChart(title, history) {
   const canvas = createCanvas(W, H);
   const ctx = canvas.getContext("2d");
 
+  // Background
   ctx.fillStyle = "#0f172a";
   ctx.fillRect(0, 0, W, H);
 
@@ -199,19 +200,21 @@ function renderChart(title, history) {
   const min = Math.min(...candles.map(c => c.low));
   const range = max - min || 1;
 
-  const xStep = chartW / candles.length; // ← nur hier!
+  const xStep = chartW / candles.length;
+  const candleW = Math.max(3, xStep * 0.6); // 60% of slot width
 
-  const x = (i) => PAD.left + i * xStep;
+  const x = (i) => PAD.left + i * xStep;// center candle in slot
 
   const y = (v) =>
     PAD.top + (1 - (v - min) / range) * chartH;
 
-  // GRID
-  ctx.strokeStyle = "#1f2937";
+  // ── GRID (TradingView Style) ──────────────────────────────────────────
+  ctx.strokeStyle = "rgba(255,255,255,0.06)";
   ctx.lineWidth = 1;
 
-  for (let i = 0; i < 6; i++) {
-    const yy = PAD.top + (i / 5) * chartH;
+  // Horizontal grid lines
+  for (let i = 0; i <= 6; i++) {
+    const yy = PAD.top + (i / 6) * chartH;
 
     ctx.beginPath();
     ctx.moveTo(PAD.left, yy);
@@ -219,15 +222,26 @@ function renderChart(title, history) {
     ctx.stroke();
   }
 
-  // AXIS
+  // Vertical grid lines
+  for (let i = 0; i <= 8; i++) {
+    const xx = PAD.left + (i / 8) * chartW;
+
+    ctx.beginPath();
+    ctx.moveTo(xx, PAD.top);
+    ctx.lineTo(xx, PAD.top + chartH);
+    ctx.stroke();
+  }
+
+  // ── AXIS ──────────────────────────────────────────────────────────────
   ctx.strokeStyle = "#374151";
+  ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(PAD.left, PAD.top);
   ctx.lineTo(PAD.left, PAD.top + chartH);
   ctx.lineTo(PAD.left + chartW, PAD.top + chartH);
   ctx.stroke();
 
-  // CANDLES
+  // ── CANDLES ───────────────────────────────────────────────────────────
   candles.forEach((c, i) => {
     const cx = x(i);
 
@@ -238,41 +252,51 @@ function renderChart(title, history) {
 
     const up = c.close >= c.open;
 
+    // Wick (thin line)
     ctx.strokeStyle = up ? "#22c55e" : "#ef4444";
-    ctx.fillStyle = up ? "#22c55e" : "#ef4444";
+    ctx.lineWidth = 1;
 
-    // wick
     ctx.beginPath();
     ctx.moveTo(cx, highY);
     ctx.lineTo(cx, lowY);
     ctx.stroke();
 
-    // body
-    const top = Math.min(openY, closeY);
-    const bodyH = Math.max(2, Math.abs(closeY - openY));
+    // Body
+    const bodyTop = Math.min(openY, closeY);
+    const bodyH = Math.max(1, Math.abs(closeY - openY));
+
+    ctx.fillStyle = up ? "#22c55e" : "#ef4444";
 
     ctx.fillRect(
-      cx - 5,
-      Math.min(openY, closeY),
-      10,
+      cx - candleW / 2,
+      bodyTop,
+      candleW,
       bodyH
     );
   });
 
-  // TITLE
+  // ── TITLE ─────────────────────────────────────────────────────────────
   ctx.fillStyle = "#fff";
   ctx.font = "bold 18px sans-serif";
   ctx.textAlign = "center";
   ctx.fillText(`${title} (Market Candles)`, W / 2, 25);
 
-  const last = candles[candles.length - 1];
-
+  // ── LAST PRICE INDICATOR ──────────────────────────────────────────────
+  const last = candles.at(-1);
+  if (!last) return canvas.toBuffer("image/png");
   const lx = x(candles.length - 1);
   const ly = y(last.close);
 
+  // Glow effect (subtle highlight)
+  ctx.fillStyle = "rgba(250, 204, 21, 0.15)";
+  ctx.beginPath();
+  ctx.arc(lx, ly, 12, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Solid dot for last close
   ctx.fillStyle = "#facc15";
   ctx.beginPath();
-  ctx.arc(lx, ly, 6, 0, Math.PI * 2);
+  ctx.arc(lx, ly, 5, 0, Math.PI * 2);
   ctx.fill();
 
   return canvas.toBuffer("image/png");
@@ -285,8 +309,8 @@ function buildContainer(query, days, stats, liveAuctions, fetchError, hasChart, 
   const reliability = getReliability(stats.totalCount);
   const lines       = [];
 
-  if (stats.lastPrice != null)
-    lines.push(`<:minecoins:1512068363864768602> **Marktwert:** ${fmt(stats.lastPrice)}$`);
+  if (stats.marketValue != null)
+    lines.push(`<:minecoins:1512068363864768602> **Marktwert:** ${fmt(stats.marketValue)}$`);
   if (stats.lastPrice != null)
     lines.push(`<:Emerad:1512068393061318728> **Letzter Preis:** ${fmt(stats.lastPrice)}$`);
   if (stats.avg7d != null)
