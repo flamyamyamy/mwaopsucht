@@ -12,43 +12,35 @@ import {
   SeparatorBuilder,
   MessageFlags,
 } from "discord.js";
-import { getFixedT } from "../../i18n/index.js";
 
 export const data = new SlashCommandBuilder()
-  .setName("banner")
-  .setDescription("Get user banner")
+  .setName("avatar")
+  .setDescription("Zeigt den Avatar eines Nutzers an")
   .setIntegrationTypes(ApplicationIntegrationType.GuildInstall, ApplicationIntegrationType.UserInstall)
   .setContexts(InteractionContextType.Guild, InteractionContextType.BotDM, InteractionContextType.PrivateChannel)
-  .addUserOption((opt) => opt.setName("user").setDescription("Target user").setRequired(false));
+  .addUserOption((opt) => opt.setName("nutzer").setDescription("Zielnutzer").setRequired(false));
 
 export async function execute(interaction) {
-  const t = interaction.t ?? getFixedT("en");
   try {
-    const user = interaction.options.getUser("user") || interaction.user;
-    const fetched = await interaction.client.users.fetch(user.id, { force: true });
-    const banner = fetched.bannerURL({ size: 1024, extension: "png" });
-
-    if (!banner) {
-      return interaction.reply({ content: t("banner.noBanner"), flags: 64 });
-    }
+    const user = interaction.options.getUser("nutzer") || interaction.user;
+    const avatar = user.displayAvatarURL({ size: 1024, extension: "png" });
 
     const container = new ContainerBuilder()
-      .setAccentColor(fetched.accentColor || 0x2b2d31)
-      .addTextDisplayComponents(new TextDisplayBuilder().setContent(`# ${user.username}'s banner`))
+      .setAccentColor(0x2b2d31)
+      .addTextDisplayComponents(new TextDisplayBuilder().setContent(`# Avatar von ${user.username}`))
       .addSeparatorComponents(new SeparatorBuilder())
-      .addMediaGalleryComponents(new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(banner)))
+      .addMediaGalleryComponents(new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(avatar)))
       .addSeparatorComponents(new SeparatorBuilder())
       .addActionRowComponents(
         new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setLabel(t("banner.label")).setStyle(ButtonStyle.Link).setURL(banner),
+          new ButtonBuilder().setLabel("Avatar herunterladen").setStyle(ButtonStyle.Link).setURL(avatar),
         ),
       );
 
     await interaction.reply({ flags: MessageFlags.IsComponentsV2, components: [container] });
   } catch (error) {
-    console.error("banner error:", error);
-    const t2 = interaction.t ?? getFixedT("en");
-    const reply = { content: t2("banner.error"), flags: 64 };
+    console.error("Avatar-Fehler:", error);
+    const reply = { content: "❌ Beim Abrufen des Avatars ist ein Fehler aufgetreten.", flags: 64 };
     if (interaction.replied || interaction.deferred) {
       await interaction.followUp(reply).catch(() => null);
     } else {

@@ -14,10 +14,9 @@ import {
   MediaGalleryItemBuilder,
   MessageFlags,
 } from "discord.js";
-import { getFixedT } from "../../i18n/index.js";
 
 function formatHex(color) {
-  if (!color) return "None";
+  if (!color) return "Keine";
   return `#${color.toString(16).padStart(6, "0").toUpperCase()}`;
 }
 
@@ -36,14 +35,8 @@ function formatBadges(flags = []) {
     CertifiedModerator: "<:moderatorprogramsalumni:1486090665631682622>",
   };
 
-  if (!flags.length) return "None";
-
-  const badgeList = flags
-    .map((flag) => badgeMap[flag])
-    .filter(Boolean)
-    .join(" ");
-
-  return badgeList || "None";
+  if (!flags.length) return "Keine";
+  return flags.map((f) => badgeMap[f]).filter(Boolean).join(" ") || "Keine";
 }
 
 async function getGuildTagData(user, client) {
@@ -51,20 +44,15 @@ async function getGuildTagData(user, client) {
   if (!primaryGuild) return null;
 
   const tag = primaryGuild.tag ?? primaryGuild.identityGuildTag ?? null;
-
   const badge = primaryGuild.badge ?? primaryGuild.tagBadge ?? null;
-
   const identityEnabled = primaryGuild.identityEnabled ?? false;
-
   const guildId = primaryGuild.identityGuildId ?? null;
-
   let guildName = primaryGuild.identityGuildName ?? null;
 
   if (!guildName && guildId) {
     const guild =
       client.guilds.cache.get(guildId) ??
       (await client.guilds.fetch(guildId).catch(() => null));
-
     guildName = guild?.name ?? null;
   }
 
@@ -73,24 +61,17 @@ async function getGuildTagData(user, client) {
     badgeIconURL = `https://cdn.discordapp.com/guild-tag-badges/${guildId}/${badge}.png?size=512`;
   }
 
-  return {
-    guildId,
-    guildName,
-    tag,
-    badge,
-    badgeIconURL,
-    identityEnabled,
-  };
+  return { guildId, guildName, tag, badge, badgeIconURL, identityEnabled };
 }
 
 function formatGuildTagDisplay(guildTagData) {
-  if (!guildTagData || !guildTagData.tag) return "None";
+  if (!guildTagData || !guildTagData.tag) return "Keiner";
   return guildTagData.tag;
 }
 
 export const data = new SlashCommandBuilder()
   .setName("userinfo")
-  .setDescription("Show detailed information about a user")
+  .setDescription("Zeigt detaillierte Informationen über einen Nutzer an")
   .setIntegrationTypes(
     ApplicationIntegrationType.GuildInstall,
     ApplicationIntegrationType.UserInstall,
@@ -101,64 +82,45 @@ export const data = new SlashCommandBuilder()
     InteractionContextType.PrivateChannel,
   )
   .addUserOption((option) =>
-    option
-      .setName("user")
-      .setDescription("The user to inspect")
-      .setRequired(false),
+    option.setName("nutzer").setDescription("Der zu prüfende Nutzer").setRequired(false),
   )
   .addBooleanOption((option) =>
     option
-      .setName("raw")
-      .setDescription("Show raw/plain user data instead of the fancy profile")
+      .setName("roh")
+      .setDescription("Rohdaten des Nutzers anzeigen")
       .setRequired(false),
   );
 
 export async function execute(interaction) {
-  const t = interaction.t ?? getFixedT("en");
   try {
-    const user = interaction.options.getUser("user") || interaction.user;
-    const raw = interaction.options.getBoolean("raw") ?? false;
+    const user = interaction.options.getUser("nutzer") || interaction.user;
+    const raw = interaction.options.getBoolean("roh") ?? false;
 
-    const fetchedUser = await interaction.client.users.fetch(user.id, {
-      force: true,
-    });
-
+    const fetchedUser = await interaction.client.users.fetch(user.id, { force: true });
     const member = interaction.guild
       ? await interaction.guild.members.fetch(user.id).catch(() => null)
       : null;
 
-    const avatar = fetchedUser.displayAvatarURL({
-      size: 1024,
-      extension: "png",
-    });
-
-    const banner = fetchedUser.bannerURL({
-      size: 1024,
-      extension: "png",
-    });
-
+    const avatar = fetchedUser.displayAvatarURL({ size: 1024, extension: "png" });
+    const banner = fetchedUser.bannerURL({ size: 1024, extension: "png" });
     const flags = fetchedUser.flags ? fetchedUser.flags.toArray() : [];
     const badges = formatBadges(flags);
-
     const guildTagData = await getGuildTagData(fetchedUser, interaction.client);
     const guildTagDisplay = formatGuildTagDisplay(guildTagData);
 
     const createdAt = `<t:${Math.floor(fetchedUser.createdTimestamp / 1000)}:F>\n(<t:${Math.floor(fetchedUser.createdTimestamp / 1000)}:R>)`;
-
     const joinedAt = member?.joinedTimestamp
       ? `<t:${Math.floor(member.joinedTimestamp / 1000)}:F>\n(<t:${Math.floor(member.joinedTimestamp / 1000)}:R>)`
-      : t("userinfo.unknown");
+      : "Unbekannt";
 
     const highestRole =
-      member?.roles?.highest &&
-      interaction.guild &&
-      member.roles.highest.id !== interaction.guild.id
+      member?.roles?.highest && interaction.guild && member.roles.highest.id !== interaction.guild.id
         ? `<@&${member.roles.highest.id}>`
-        : t("userinfo.none");
+        : "Keine";
 
     const boosterSince = member?.premiumSinceTimestamp
       ? `<t:${Math.floor(member.premiumSinceTimestamp / 1000)}:R>`
-      : t("userinfo.no");
+      : "Nein";
 
     if (raw) {
       const rawData = {
@@ -194,44 +156,39 @@ export async function execute(interaction) {
           ? {
               nickname: member.nickname ?? null,
               joinedTimestamp: member.joinedTimestamp ?? null,
-              joinedAt: member.joinedTimestamp
-                ? new Date(member.joinedTimestamp).toISOString()
-                : null,
+              joinedAt: member.joinedTimestamp ? new Date(member.joinedTimestamp).toISOString() : null,
               premiumSinceTimestamp: member.premiumSinceTimestamp ?? null,
               premiumSince: member.premiumSinceTimestamp
                 ? new Date(member.premiumSinceTimestamp).toISOString()
                 : null,
               highestRole:
                 member.roles?.highest?.id !== interaction.guild.id
-                  ? {
-                      id: member.roles.highest.id,
-                      name: member.roles.highest.name,
-                    }
+                  ? { id: member.roles.highest.id, name: member.roles.highest.name }
                   : null,
             }
           : null,
       };
 
       return await interaction.reply({
-        content: `## ${t("userinfo.rawTitle")}\n\`\`\`json\n${JSON.stringify(rawData, null, 2).slice(0, 3900)}\n\`\`\``,
+        content: `## Rohdaten des Nutzers\n\`\`\`json\n${JSON.stringify(rawData, null, 2).slice(0, 3900)}\n\`\`\``,
         flags: 64,
       });
     }
 
     const mainText = [
-      `# ${t("userinfo.profileTitle", { username: fetchedUser.username })}`,
+      `# Profil von ${fetchedUser.username}`,
       "",
-      `**${t("userinfo.user")}**`,
+      `**Nutzer**`,
       `${fetchedUser.tag}`,
       `\`${fetchedUser.id}\``,
       "",
-      `**${t("userinfo.displayName")}:** ${fetchedUser.globalName || t("userinfo.none")}`,
-      `**${t("userinfo.guildTag")}:** ${guildTagDisplay}`,
-      `**${t("userinfo.bot")}:** ${fetchedUser.bot ? t("userinfo.yes") : t("userinfo.no")}`,
-      `**${t("userinfo.accentColor")}:** ${formatHex(fetchedUser.accentColor)}`,
-      `**${t("userinfo.badges")}:** ${badges}`,
+      `**Anzeigename:** ${fetchedUser.globalName || "Keiner"}`,
+      `**Server-Tag:** ${guildTagDisplay}`,
+      `**Bot:** ${fetchedUser.bot ? "Ja" : "Nein"}`,
+      `**Akzentfarbe:** ${formatHex(fetchedUser.accentColor)}`,
+      `**Abzeichen:** ${badges}`,
       "",
-      `**${t("userinfo.accountCreated")}:**`,
+      `**Konto erstellt:**`,
       `${createdAt}`,
     ].join("\n");
 
@@ -239,9 +196,7 @@ export async function execute(interaction) {
       .setAccentColor(fetchedUser.accentColor || 0x2b2d31)
       .addSectionComponents(
         new SectionBuilder()
-          .addTextDisplayComponents(
-            new TextDisplayBuilder().setContent(mainText),
-          )
+          .addTextDisplayComponents(new TextDisplayBuilder().setContent(mainText))
           .setThumbnailAccessory(new ThumbnailBuilder().setURL(avatar)),
       );
 
@@ -251,12 +206,12 @@ export async function execute(interaction) {
         .addTextDisplayComponents(
           new TextDisplayBuilder().setContent(
             [
-              `## ${t("userinfo.guildTagTitle")}`,
+              `## Server-Tag`,
               "",
-              `**${t("userinfo.tagName")}:** ${guildTagData.tag || t("userinfo.none")}`,
-              `**${t("userinfo.guildName")}:** ${guildTagData.guildName || t("userinfo.unknown")}`,
-              `**${t("userinfo.guildId")}:** ${guildTagData.guildId || t("userinfo.unknown")}`,
-              `**${t("userinfo.identityEnabled")}:** ${guildTagData.identityEnabled ? t("userinfo.yes") : t("userinfo.no")}`,
+              `**Tag-Name:** ${guildTagData.tag || "Keiner"}`,
+              `**Servername:** ${guildTagData.guildName || "Unbekannt"}`,
+              `**Server-ID:** ${guildTagData.guildId || "Unbekannt"}`,
+              `**Identität aktiv:** ${guildTagData.identityEnabled ? "Ja" : "Nein"}`,
             ].join("\n"),
           ),
         );
@@ -276,14 +231,14 @@ export async function execute(interaction) {
         .addTextDisplayComponents(
           new TextDisplayBuilder().setContent(
             [
-              `## ${t("userinfo.serverInfo")}`,
+              `## Serverinformationen`,
               "",
-              `**${t("userinfo.joinedServer")}:**`,
+              `**Beigetreten:**`,
               `${joinedAt}`,
               "",
-              `**${t("userinfo.nickname")}:** ${member.nickname || t("userinfo.none")}`,
-              `**${t("userinfo.highestRole")}:** ${highestRole}`,
-              `**${t("userinfo.serverBooster")}:** ${boosterSince}`,
+              `**Spitzname:** ${member.nickname || "Keiner"}`,
+              `**Höchste Rolle:** ${highestRole}`,
+              `**Server-Booster:** ${boosterSince}`,
             ].join("\n"),
           ),
         );
@@ -292,73 +247,43 @@ export async function execute(interaction) {
     if (banner) {
       container
         .addSeparatorComponents(new SeparatorBuilder())
-        .addTextDisplayComponents(
-          new TextDisplayBuilder().setContent(`## ${t("userinfo.banner")}`),
-        )
+        .addTextDisplayComponents(new TextDisplayBuilder().setContent(`## Banner`))
         .addMediaGalleryComponents(
-          new MediaGalleryBuilder().addItems(
-            new MediaGalleryItemBuilder().setURL(banner),
-          ),
+          new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(banner)),
         );
     }
 
     const buttons = [
-      new ButtonBuilder()
-        .setLabel(t("userinfo.avatarUrl"))
-        .setStyle(ButtonStyle.Link)
-        .setURL(avatar),
+      new ButtonBuilder().setLabel("Avatar-URL").setStyle(ButtonStyle.Link).setURL(avatar),
     ];
 
     if (banner) {
-      buttons.push(
-        new ButtonBuilder()
-          .setLabel(t("userinfo.bannerUrl"))
-          .setStyle(ButtonStyle.Link)
-          .setURL(banner),
-      );
+      buttons.push(new ButtonBuilder().setLabel("Banner-URL").setStyle(ButtonStyle.Link).setURL(banner));
     }
 
     if (guildTagData?.badgeIconURL) {
       buttons.push(
-        new ButtonBuilder()
-          .setLabel(t("userinfo.guildTagBadge"))
-          .setStyle(ButtonStyle.Link)
-          .setURL(guildTagData.badgeIconURL),
+        new ButtonBuilder().setLabel("Tag-Abzeichen").setStyle(ButtonStyle.Link).setURL(guildTagData.badgeIconURL),
       );
     }
 
     buttons.push(
       new ButtonBuilder()
-        .setLabel(t("userinfo.profile"))
+        .setLabel("Profil öffnen")
         .setStyle(ButtonStyle.Link)
         .setURL(`https://discord.com/users/${fetchedUser.id}`),
     );
 
-    container.addActionRowComponents(
-      new ActionRowBuilder().addComponents(buttons),
-    );
+    container.addActionRowComponents(new ActionRowBuilder().addComponents(buttons));
 
-    await interaction.reply({
-      flags: MessageFlags.IsComponentsV2,
-      components: [container],
-    });
+    await interaction.reply({ flags: MessageFlags.IsComponentsV2, components: [container] });
   } catch (error) {
-    console.error("userinfo error:", error);
-
+    console.error("userinfo-Fehler:", error);
+    const reply = { content: "❌ Beim Abrufen der Nutzerinformationen ist ein Fehler aufgetreten.", flags: 64 };
     if (interaction.replied || interaction.deferred) {
-      await interaction
-        .followUp({
-          content: t("userinfo.error"),
-          flags: 64,
-        })
-        .catch(() => {});
+      await interaction.followUp(reply).catch(() => {});
     } else {
-      await interaction
-        .reply({
-          content: t("userinfo.error"),
-          flags: 64,
-        })
-        .catch(() => {});
+      await interaction.reply(reply).catch(() => {});
     }
   }
 }

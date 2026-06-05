@@ -1,56 +1,50 @@
 import {
   SlashCommandBuilder,
-  EmbedBuilder,
-  ApplicationIntegrationType,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
   InteractionContextType,
+  ApplicationIntegrationType,
+  ContainerBuilder,
+  TextDisplayBuilder,
+  MediaGalleryBuilder,
+  MediaGalleryItemBuilder,
+  SeparatorBuilder,
+  MessageFlags,
 } from "discord.js";
-import { actions, getGif, getText } from "../../utils/reactions.js";
-import { getFixedT } from "../../i18n/index.js";
 
 export const data = new SlashCommandBuilder()
-  .setName("react")
-  .setDescription("Send an anime reaction!")
-  .setIntegrationTypes(
-    ApplicationIntegrationType.GuildInstall,
-    ApplicationIntegrationType.UserInstall,
-  )
-  .setContexts(
-    InteractionContextType.Guild,
-    InteractionContextType.BotDM,
-    InteractionContextType.PrivateChannel,
-  )
-  .addStringOption((option) =>
-    option
-      .setName("type")
-      .setDescription("Reaction type")
-      .setRequired(true)
-      .addChoices(...actions.map((a) => ({ name: a, value: a }))),
-  )
-  .addUserOption((option) =>
-    option
-      .setName("user")
-      .setDescription("Target user")
-      .setRequired(false),
-  );
+  .setName("avatar")
+  .setDescription("Zeigt den Avatar eines Nutzers an")
+  .setIntegrationTypes(ApplicationIntegrationType.GuildInstall, ApplicationIntegrationType.UserInstall)
+  .setContexts(InteractionContextType.Guild, InteractionContextType.BotDM, InteractionContextType.PrivateChannel)
+  .addUserOption((opt) => opt.setName("nutzer").setDescription("Zielnutzer").setRequired(false));
 
 export async function execute(interaction) {
-  const t = interaction.t ?? getFixedT("en");
-  const type = interaction.options.getString("type");
-  const author = interaction.user;
-  const rawTarget = interaction.options.getUser("user");
-  const targetUser = rawTarget?.id === author.id ? null : rawTarget;
+  try {
+    const user = interaction.options.getUser("nutzer") || interaction.user;
+    const avatar = user.displayAvatarURL({ size: 1024, extension: "png" });
 
+    const container = new ContainerBuilder()
+      .setAccentColor(0x2b2d31)
+      .addTextDisplayComponents(new TextDisplayBuilder().setContent(`# Avatar von ${user.username}`))
+      .addSeparatorComponents(new SeparatorBuilder())
+      .addMediaGalleryComponents(new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(avatar)))
+      .addSeparatorComponents(new SeparatorBuilder())
+      .addActionRowComponents(
+        new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setLabel("Avatar herunterladen").setStyle(ButtonStyle.Link).setURL(avatar),
+        ),
+      );
 
-  await interaction.deferReply();
-
-  const gif = await getGif(type);
-  const text = getText(type, author, targetUser);
-
-  const embed = new EmbedBuilder()
-    .setDescription(text)
-    .setColor(0xfaa698);
-
-  if (gif) embed.setImage(gif);
-
-  await interaction.editReply({ embeds: [embed] });
+    await interaction.reply({ flags: MessageFlags.IsComponentsV2, components: [container] });
+  } catch (error) {
+    console.error("Avatar-Fehler:", error);
+    const reply = { content: "❌ Beim Abrufen des Avatars ist ein Fehler aufgetreten.", flags: 64 };
+    if (interaction.replied || interaction.deferred) {
+      await interaction.followUp(reply).catch(() => null);
+    } else {
+      await interaction.reply(reply).catch(() => null);
+    }
+  }
 }
