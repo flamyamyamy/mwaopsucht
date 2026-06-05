@@ -1,4 +1,11 @@
-import { SlashCommandBuilder, ContainerBuilder, TextDisplayBuilder, SeparatorBuilder, MessageFlags } from "discord.js";
+import {
+  SlashCommandBuilder,
+  ContainerBuilder,
+  TextDisplayBuilder,
+  SeparatorBuilder,
+  ThumbnailBuilder,
+  MessageFlags,
+} from "discord.js";
 import { getMarketItems, getItemPrice, getItemHistory, fmt, prettyMaterial } from "../utils/api.js";
 
 export const data = new SlashCommandBuilder()
@@ -72,6 +79,11 @@ export async function execute(interaction) {
     new TextDisplayBuilder().setContent(`# 📈 Marktpreis: ${displayName}`)
   );
 
+  // ── Item Icon (Thumbnail oben rechts) ──────────────────────────────────
+  container.addThumbnailComponents(
+    new ThumbnailBuilder().setURL(itemIconUrl(material))
+  );
+
   if (isNewFormat) {
     const buyPrice   = buy?.price;
     const sellPrice  = sell?.price;
@@ -94,9 +106,9 @@ export async function execute(interaction) {
     );
 
     const fieldLines = [];
-    if (buyPrice  != null) fieldLines.push(`**<:minecoin:1512068363864768602> Kaufpreis**\n${fmt(buyPrice)}$`);
-    if (sellPrice != null) fieldLines.push(`**<:Redstone:1512068332122017822> Verkaufspreis**\n${fmt(sellPrice)}$`);
-    if (spread    != null) fieldLines.push(`**<:Arrow:1512067924117159947> Spread**\n${spread}$`);
+    if (buyPrice   != null) fieldLines.push(`**<:minecoin:1512068363864768602> Kaufpreis**\n${fmt(buyPrice)}$`);
+    if (sellPrice  != null) fieldLines.push(`**<:Redstone:1512068332122017822> Verkaufspreis**\n${fmt(sellPrice)}$`);
+    if (spread     != null) fieldLines.push(`**<:Arrow:1512067924117159947> Spread**\n${spread}$`);
     if (buyOrders  != null) fieldLines.push(`**<a:chest:1512077870481145939> Kauf-Aufträge**\n${fmt(buyOrders)}`);
     if (sellOrders != null) fieldLines.push(`**<a:chest:1512077870481145939> Verkauf-Aufträge**\n${fmt(sellOrders)}`);
 

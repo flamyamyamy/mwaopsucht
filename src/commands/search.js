@@ -5,6 +5,7 @@ import {
   SeparatorBuilder,
   MediaGalleryBuilder,
   MediaGalleryItemBuilder,
+  ThumbnailBuilder,
   ActionRowBuilder,
   StringSelectMenuBuilder,
   AttachmentBuilder,
@@ -104,7 +105,6 @@ export async function execute(interaction) {
   if (history.length >= 2) {
     try {
       const buf   = renderChart(query, history, stats, liveAuctions);
-      // AttachmentBuilder wie in der alten Version – das ist der Fix für die Chart-Anzeige
       chartAttachment = new AttachmentBuilder(buf, { name: "preisverlauf.png" });
     } catch (err) {
       console.error("[search] chart render error:", err);
@@ -190,7 +190,6 @@ function renderChart(title, history, stats, liveAuctions) {
   ctx.fillStyle = "#0a0e27";
   ctx.fillRect(0, 0, W, H);
 
-  // Subtle gradient overlay
   const grad = ctx.createLinearGradient(0, 0, 0, H);
   grad.addColorStop(0, "rgba(20, 30, 60, 0.3)");
   grad.addColorStop(1, "rgba(10, 14, 39, 0)");
@@ -216,7 +215,6 @@ function renderChart(title, history, stats, liveAuctions) {
   ctx.strokeStyle = "rgba(148, 163, 184, 0.08)";
   ctx.lineWidth = 1;
 
-  // Horizontal grid with labels
   for (let i = 0; i <= 5; i++) {
     const yy = PAD.top + (i / 5) * chartH;
     const price = max - (i / 5) * range;
@@ -226,14 +224,12 @@ function renderChart(title, history, stats, liveAuctions) {
     ctx.lineTo(PAD.left + chartW, yy);
     ctx.stroke();
 
-    // Price labels on right
     ctx.fillStyle = "rgba(148, 163, 184, 0.6)";
     ctx.font = "11px 'Segoe UI', sans-serif";
     ctx.textAlign = "left";
     ctx.fillText(fmt(Math.round(price)), PAD.left + chartW + 10, yy + 4);
   }
 
-  // Vertical grid lines (lighter)
   ctx.strokeStyle = "rgba(148, 163, 184, 0.03)";
   for (let i = 0; i <= 10; i++) {
     const xx = PAD.left + (i / 10) * chartW;
@@ -252,8 +248,7 @@ function renderChart(title, history, stats, liveAuctions) {
   ctx.lineTo(PAD.left + chartW, PAD.top + chartH);
   ctx.stroke();
 
-  // ── MOVING AVERAGES (OPTIONAL) ─────────────────────────────────────────
-  // Draw subtle trend line from first to last
+  // ── TREND LINE ─────────────────────────────────────────────────────────
   if (candles.length >= 2) {
     const firstY = y(candles[0].close);
     const lastY = y(candles[candles.length - 1].close);
@@ -268,21 +263,20 @@ function renderChart(title, history, stats, liveAuctions) {
     ctx.setLineDash([]);
   }
 
-  // ── CANDLES (HIGH QUALITY) ─────────────────────────────────────────────
+  // ── CANDLES ────────────────────────────────────────────────────────────
   candles.forEach((c, i) => {
     const cx = x(i);
 
-    const openY = y(c.open);
+    const openY  = y(c.open);
     const closeY = y(c.close);
-    const highY = y(c.high);
-    const lowY = y(c.low);
+    const highY  = y(c.high);
+    const lowY   = y(c.low);
 
     const up = c.close >= c.open;
 
-    const color = up ? "#10b981" : "#ef4444";
+    const color     = up ? "#10b981" : "#ef4444";
     const wickColor = up ? "rgba(16, 185, 129, 0.7)" : "rgba(239, 68, 68, 0.7)";
 
-    // Wick (thin, transparent)
     ctx.strokeStyle = wickColor;
     ctx.lineWidth = 1.5;
     ctx.beginPath();
@@ -290,16 +284,14 @@ function renderChart(title, history, stats, liveAuctions) {
     ctx.lineTo(cx, lowY);
     ctx.stroke();
 
-    // Body (solid)
     const bodyTop = Math.min(openY, closeY);
-    const bodyH = Math.max(1.5, Math.abs(closeY - openY));
+    const bodyH   = Math.max(1.5, Math.abs(closeY - openY));
 
     ctx.fillStyle = color;
     ctx.globalAlpha = 0.9;
     ctx.fillRect(cx - candleW / 2, bodyTop, candleW, bodyH);
     ctx.globalAlpha = 1;
 
-    // Optional: Border for better definition
     ctx.strokeStyle = color;
     ctx.lineWidth = 0.5;
     ctx.strokeRect(cx - candleW / 2, bodyTop, candleW, bodyH);
@@ -311,7 +303,6 @@ function renderChart(title, history, stats, liveAuctions) {
     if (currentPrice != null) {
       const liveY = y(currentPrice);
 
-      // Horizontal line across chart
       ctx.strokeStyle = "rgba(59, 130, 246, 0.25)";
       ctx.lineWidth = 1;
       ctx.setLineDash([3, 3]);
@@ -321,7 +312,6 @@ function renderChart(title, history, stats, liveAuctions) {
       ctx.stroke();
       ctx.setLineDash([]);
 
-      // Live label on left
       ctx.fillStyle = "#3b82f6";
       ctx.font = "bold 12px 'Segoe UI', sans-serif";
       ctx.textAlign = "right";
@@ -334,19 +324,16 @@ function renderChart(title, history, stats, liveAuctions) {
   const lx = x(candles.length - 1);
   const ly = y(last.close);
 
-  // Outer glow
   ctx.fillStyle = "rgba(250, 204, 21, 0.2)";
   ctx.beginPath();
   ctx.arc(lx, ly, 14, 0, Math.PI * 2);
   ctx.fill();
 
-  // Inner glow
   ctx.fillStyle = "rgba(250, 204, 21, 0.4)";
   ctx.beginPath();
   ctx.arc(lx, ly, 8, 0, Math.PI * 2);
   ctx.fill();
 
-  // Solid dot
   ctx.fillStyle = "#facc15";
   ctx.beginPath();
   ctx.arc(lx, ly, 4, 0, Math.PI * 2);
@@ -358,12 +345,11 @@ function renderChart(title, history, stats, liveAuctions) {
   ctx.textAlign = "left";
   ctx.fillText(`📊 ${title}`, PAD.left, 30);
 
-  // Stats badge
-  const change = stats.lastPrice != null && stats.avg7d != null 
+  const change = stats.lastPrice != null && stats.avg7d != null
     ? ((stats.lastPrice - stats.avg7d) / stats.avg7d * 100).toFixed(1)
     : 0;
   const changeColor = change >= 0 ? "#10b981" : "#ef4444";
-  const changeStr = change >= 0 ? `↑ +${change}%` : `↓ ${change}%`;
+  const changeStr   = change >= 0 ? `↑ +${change}%` : `↓ ${change}%`;
 
   ctx.fillStyle = changeColor;
   ctx.font = "bold 14px 'Segoe UI', sans-serif";
@@ -378,7 +364,6 @@ function renderChart(title, history, stats, liveAuctions) {
   const statsText = `High: ${fmt(max)}$ | Low: ${fmt(min)}$ | Avg: ${fmt((max + min) / 2)}$ | Range: ${candles.length} candles`;
   ctx.fillText(statsText, PAD.left, H - 10);
 
-  // ── TIME RANGE LABEL ───────────────────────────────────────────────────
   ctx.fillStyle = "rgba(148, 163, 184, 0.6)";
   ctx.font = "10px 'Segoe UI', sans-serif";
   ctx.textAlign = "right";
@@ -412,7 +397,7 @@ function buildContainer(query, days, stats, liveAuctions, fetchError, hasChart, 
   lines.push(
     `<:Book:1512074541638226021> **Datensätze:** ${stats.periodCount} (${days === 999 ? "Alle" : `${days} Tage`}) — **${stats.totalCount} gesamt**`
   );
-  lines.push(`<:Name_Tag:1512068432123456789> **Verlässlichkeit:** ${reliability.label}`);
+  lines.push(`<:Name_Tag:1512068231198806116> **Verlässlichkeit:** ${reliability.label}`);
 
   const statsContent = lines.length > 0
     ? `# 🛒 ${query}\n\n${lines.join("\n")}`
@@ -422,8 +407,14 @@ function buildContainer(query, days, stats, liveAuctions, fetchError, hasChart, 
     new TextDisplayBuilder().setContent(statsContent)
   );
 
-  // ── Chart ────────────────────────────────────────────────────────────────
-  // MediaGallery ist der korrekte Weg um Bilder in Containern anzuzeigen
+  // ── Item Icon (Thumbnail oben rechts) ──────────────────────────────────
+  if (itemIcon) {
+    container.addThumbnailComponents(
+      new ThumbnailBuilder().setURL(itemIcon)
+    );
+  }
+
+  // ── Chart ───────────────────────────────────────────────────────────────
   if (hasChart) {
     container.addSeparatorComponents(new SeparatorBuilder());
     container.addTextDisplayComponents(
