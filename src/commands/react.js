@@ -4,7 +4,7 @@ import {
   ApplicationIntegrationType,
   InteractionContextType,
 } from "discord.js";
-import { actions, getGif, getText } from "../../utils/reactions.js";
+import { actions, getGif, getText } from "../utils/reactions.js";
 
 export const data = new SlashCommandBuilder()
   .setName("react")
