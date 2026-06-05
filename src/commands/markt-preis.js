@@ -1,9 +1,10 @@
 import {
   SlashCommandBuilder,
   ContainerBuilder,
+  SectionBuilder,
   TextDisplayBuilder,
-  SeparatorBuilder,
   ThumbnailBuilder,
+  SeparatorBuilder,
   MessageFlags,
 } from "discord.js";
 import { getMarketItems, getItemPrice, getItemHistory, fmt, prettyMaterial } from "../utils/api.js";
@@ -75,13 +76,15 @@ export async function execute(interaction) {
 
   const container = new ContainerBuilder();
 
-  container.addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(`# 📈 Marktpreis: ${displayName}`)
-  );
-
-  // ── Item Icon (Thumbnail oben rechts) ──────────────────────────────────
-  container.addThumbnailComponents(
-    new ThumbnailBuilder().setURL(itemIconUrl(material))
+  // ── Titel + Icon als Section mit Thumbnail ──────────────────────────────
+  container.addSectionComponents(
+    new SectionBuilder()
+      .addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(`# 📈 Marktpreis: ${displayName}`)
+      )
+      .setThumbnailAccessory(
+        new ThumbnailBuilder().setURL(itemIconUrl(material))
+      )
   );
 
   if (isNewFormat) {

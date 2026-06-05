@@ -1,11 +1,12 @@
 import {
   SlashCommandBuilder,
   ContainerBuilder,
+  SectionBuilder,
   TextDisplayBuilder,
+  ThumbnailBuilder,
   SeparatorBuilder,
   MediaGalleryBuilder,
   MediaGalleryItemBuilder,
-  ThumbnailBuilder,
   ActionRowBuilder,
   StringSelectMenuBuilder,
   AttachmentBuilder,
@@ -66,7 +67,6 @@ export async function autocomplete(interaction) {
 // ── Execute ────────────────────────────────────────────────────────────────────
 
 export async function execute(interaction) {
-  // IsComponentsV2 Flag für Container-Support
   await interaction.deferReply({ flags: MessageFlags.IsComponentsV2 });
 
   const query = interaction.options.getString("item");
@@ -94,11 +94,13 @@ export async function execute(interaction) {
   }
 
   // ── 2) DB-Statistiken ────────────────────────────────────────────────────
-  const stats = getItemStats(query, days);
+  const stats   = getItemStats(query, days);
   const history = getCandleHistory(query, days);
 
   // ── 3) Item-Icon URL ─────────────────────────────────────────────────────
-  const itemIcon = itemMaterial ? getItemIconUrl(itemMaterial) : null;
+  // Fallback: query direkt als Material nutzen falls keine Live-Auktionen
+  const resolvedMaterial = itemMaterial ?? query;
+  const itemIcon = getItemIconUrl(resolvedMaterial);
 
   // ── 4) Chart generieren ──────────────────────────────────────────────────
   let chartAttachment = null;
@@ -141,7 +143,7 @@ export async function execute(interaction) {
     let newAttachment = null;
     if (newHistory.length >= 2) {
       try {
-        const buf    = renderChart(query, newHistory, newStats, liveAuctions);
+        const buf     = renderChart(query, newHistory, newStats, liveAuctions);
         newAttachment = new AttachmentBuilder(buf, { name: "preisverlauf.png" });
       } catch (err) {
         console.error("[search] chart re-render error:", err);
@@ -160,7 +162,6 @@ export async function execute(interaction) {
   });
 
   collector.on("end", () => {
-    // Dropdown deaktivieren wenn Collector abläuft
     const disabledRow = new ActionRowBuilder().addComponents(
       new StringSelectMenuBuilder()
         .setCustomId(`search_period:${query}`)
@@ -177,7 +178,7 @@ export async function execute(interaction) {
   });
 }
 
-// ── Professional Canvas Chart (TradingView + Live Data) ─────────────────────────
+// ── Professional Canvas Chart ──────────────────────────────────────────────────
 
 function renderChart(title, history, stats, liveAuctions) {
   const W = 1000, H = 500;
@@ -186,7 +187,6 @@ function renderChart(title, history, stats, liveAuctions) {
   const canvas = createCanvas(W, H);
   const ctx = canvas.getContext("2d");
 
-  // ── BACKGROUND & GRADIENT ──────────────────────────────────────────────
   ctx.fillStyle = "#0a0e27";
   ctx.fillRect(0, 0, W, H);
 
@@ -198,32 +198,24 @@ function renderChart(title, history, stats, liveAuctions) {
 
   const chartW = W - PAD.left - PAD.right;
   const chartH = H - PAD.top - PAD.bottom;
-
   const candles = history.slice(-50);
-
   const max = Math.max(...candles.map(c => c.high));
   const min = Math.min(...candles.map(c => c.low));
   const range = max - min || 1;
-
   const xStep = chartW / candles.length;
   const candleW = Math.max(2, xStep * 0.65);
-
   const x = (i) => PAD.left + i * xStep + xStep / 2;
   const y = (v) => PAD.top + (1 - (v - min) / range) * chartH;
 
-  // ── PROFESSIONAL GRID ──────────────────────────────────────────────────
   ctx.strokeStyle = "rgba(148, 163, 184, 0.08)";
   ctx.lineWidth = 1;
-
   for (let i = 0; i <= 5; i++) {
     const yy = PAD.top + (i / 5) * chartH;
     const price = max - (i / 5) * range;
-
     ctx.beginPath();
     ctx.moveTo(PAD.left, yy);
     ctx.lineTo(PAD.left + chartW, yy);
     ctx.stroke();
-
     ctx.fillStyle = "rgba(148, 163, 184, 0.6)";
     ctx.font = "11px 'Segoe UI', sans-serif";
     ctx.textAlign = "left";
@@ -239,7 +231,6 @@ function renderChart(title, history, stats, liveAuctions) {
     ctx.stroke();
   }
 
-  // ── AXIS LINES ─────────────────────────────────────────────────────────
   ctx.strokeStyle = "rgba(148, 163, 184, 0.3)";
   ctx.lineWidth = 2;
   ctx.beginPath();
@@ -248,32 +239,24 @@ function renderChart(title, history, stats, liveAuctions) {
   ctx.lineTo(PAD.left + chartW, PAD.top + chartH);
   ctx.stroke();
 
-  // ── TREND LINE ─────────────────────────────────────────────────────────
   if (candles.length >= 2) {
-    const firstY = y(candles[0].close);
-    const lastY = y(candles[candles.length - 1].close);
-
     ctx.strokeStyle = "rgba(100, 116, 139, 0.2)";
     ctx.lineWidth = 2;
     ctx.setLineDash([5, 5]);
     ctx.beginPath();
-    ctx.moveTo(x(0), firstY);
-    ctx.lineTo(x(candles.length - 1), lastY);
+    ctx.moveTo(x(0), y(candles[0].close));
+    ctx.lineTo(x(candles.length - 1), y(candles[candles.length - 1].close));
     ctx.stroke();
     ctx.setLineDash([]);
   }
 
-  // ── CANDLES ────────────────────────────────────────────────────────────
   candles.forEach((c, i) => {
     const cx = x(i);
-
     const openY  = y(c.open);
     const closeY = y(c.close);
     const highY  = y(c.high);
     const lowY   = y(c.low);
-
     const up = c.close >= c.open;
-
     const color     = up ? "#10b981" : "#ef4444";
     const wickColor = up ? "rgba(16, 185, 129, 0.7)" : "rgba(239, 68, 68, 0.7)";
 
@@ -286,23 +269,19 @@ function renderChart(title, history, stats, liveAuctions) {
 
     const bodyTop = Math.min(openY, closeY);
     const bodyH   = Math.max(1.5, Math.abs(closeY - openY));
-
     ctx.fillStyle = color;
     ctx.globalAlpha = 0.9;
     ctx.fillRect(cx - candleW / 2, bodyTop, candleW, bodyH);
     ctx.globalAlpha = 1;
-
     ctx.strokeStyle = color;
     ctx.lineWidth = 0.5;
     ctx.strokeRect(cx - candleW / 2, bodyTop, candleW, bodyH);
   });
 
-  // ── LIVE DATA INDICATOR ────────────────────────────────────────────────
   if (liveAuctions.length > 0) {
     const currentPrice = liveAuctions[0]?.currentBid || stats.lastPrice;
     if (currentPrice != null) {
       const liveY = y(currentPrice);
-
       ctx.strokeStyle = "rgba(59, 130, 246, 0.25)";
       ctx.lineWidth = 1;
       ctx.setLineDash([3, 3]);
@@ -311,7 +290,6 @@ function renderChart(title, history, stats, liveAuctions) {
       ctx.lineTo(PAD.left + chartW, liveY);
       ctx.stroke();
       ctx.setLineDash([]);
-
       ctx.fillStyle = "#3b82f6";
       ctx.font = "bold 12px 'Segoe UI', sans-serif";
       ctx.textAlign = "right";
@@ -319,27 +297,16 @@ function renderChart(title, history, stats, liveAuctions) {
     }
   }
 
-  // ── LAST CANDLE HIGHLIGHT ──────────────────────────────────────────────
   const last = candles[candles.length - 1];
   const lx = x(candles.length - 1);
   const ly = y(last.close);
-
   ctx.fillStyle = "rgba(250, 204, 21, 0.2)";
-  ctx.beginPath();
-  ctx.arc(lx, ly, 14, 0, Math.PI * 2);
-  ctx.fill();
-
+  ctx.beginPath(); ctx.arc(lx, ly, 14, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = "rgba(250, 204, 21, 0.4)";
-  ctx.beginPath();
-  ctx.arc(lx, ly, 8, 0, Math.PI * 2);
-  ctx.fill();
-
+  ctx.beginPath(); ctx.arc(lx, ly, 8, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = "#facc15";
-  ctx.beginPath();
-  ctx.arc(lx, ly, 4, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.beginPath(); ctx.arc(lx, ly, 4, 0, Math.PI * 2); ctx.fill();
 
-  // ── TITLE & INFO ───────────────────────────────────────────────────────
   ctx.fillStyle = "#f8fafc";
   ctx.font = "bold 22px 'Segoe UI', sans-serif";
   ctx.textAlign = "left";
@@ -350,25 +317,20 @@ function renderChart(title, history, stats, liveAuctions) {
     : 0;
   const changeColor = change >= 0 ? "#10b981" : "#ef4444";
   const changeStr   = change >= 0 ? `↑ +${change}%` : `↓ ${change}%`;
-
   ctx.fillStyle = changeColor;
   ctx.font = "bold 14px 'Segoe UI', sans-serif";
   ctx.textAlign = "right";
   ctx.fillText(changeStr, W - PAD.right, 30);
 
-  // ── BOTTOM STATS ───────────────────────────────────────────────────────
   ctx.fillStyle = "rgba(148, 163, 184, 0.8)";
   ctx.font = "11px 'Segoe UI', sans-serif";
   ctx.textAlign = "left";
-
-  const statsText = `High: ${fmt(max)}$ | Low: ${fmt(min)}$ | Avg: ${fmt((max + min) / 2)}$ | Range: ${candles.length} candles`;
-  ctx.fillText(statsText, PAD.left, H - 10);
+  ctx.fillText(`High: ${fmt(max)}$ | Low: ${fmt(min)}$ | Avg: ${fmt((max + min) / 2)}$ | Range: ${candles.length} candles`, PAD.left, H - 10);
 
   ctx.fillStyle = "rgba(148, 163, 184, 0.6)";
   ctx.font = "10px 'Segoe UI', sans-serif";
   ctx.textAlign = "right";
-  const now = new Date();
-  ctx.fillText(`Updated: ${now.toLocaleTimeString()}`, W - PAD.right, H - 10);
+  ctx.fillText(`Updated: ${new Date().toLocaleTimeString()}`, W - PAD.right, H - 10);
 
   return canvas.toBuffer("image/png");
 }
@@ -397,24 +359,24 @@ function buildContainer(query, days, stats, liveAuctions, fetchError, hasChart, 
   lines.push(
     `<:Book:1512074541638226021> **Datensätze:** ${stats.periodCount} (${days === 999 ? "Alle" : `${days} Tage`}) — **${stats.totalCount} gesamt**`
   );
-  lines.push(`<:Name_Tag:1512068231198806116> **Verlässlichkeit:** ${reliability.label}`);
+  lines.push(`<:Name_Tag:1512068432123456789> **Verlässlichkeit:** ${reliability.label}`);
 
   const statsContent = lines.length > 0
     ? `# 🛒 ${query}\n\n${lines.join("\n")}`
     : `# 🛒 ${query}\n\n⚠️ Noch keine Daten in der DB für dieses Item.\nDaten werden gesammelt, sobald das Item im AH erscheint.`;
 
-  container.addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(statsContent)
+  // ── Stats + Thumbnail als Section ────────────────────────────────────────
+  container.addSectionComponents(
+    new SectionBuilder()
+      .addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(statsContent)
+      )
+      .setThumbnailAccessory(
+        new ThumbnailBuilder().setURL(itemIcon)
+      )
   );
 
-  // ── Item Icon (Thumbnail oben rechts) ──────────────────────────────────
-  if (itemIcon) {
-    container.addThumbnailComponents(
-      new ThumbnailBuilder().setURL(itemIcon)
-    );
-  }
-
-  // ── Chart ───────────────────────────────────────────────────────────────
+  // ── Chart ─────────────────────────────────────────────────────────────────
   if (hasChart) {
     container.addSeparatorComponents(new SeparatorBuilder());
     container.addTextDisplayComponents(
@@ -497,21 +459,6 @@ function getItemIconUrl(material) {
   if (!material) return null;
   const normalized = material.toLowerCase().replace(/^minecraft:/, "").replace(/ /g, "_");
   return `https://img.mc-api.io/${normalized}.png`;
-}
-
-function sampleArray(arr, n) {
-  if (arr.length <= n) return arr;
-  const result = [];
-  for (let i = 0; i < n; i++) {
-    result.push(arr[Math.round((i / (n - 1)) * (arr.length - 1))]);
-  }
-  return result;
-}
-
-function fmtShort(n) {
-  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(".", ",") + "M";
-  if (n >= 1_000)     return (n / 1_000).toFixed(0) + "K";
-  return String(Math.round(n));
 }
 
 function getReliability(count) {
