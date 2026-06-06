@@ -18,7 +18,7 @@ export default function mediaOnlyEvent(client) {
       // Foto/Video vorhanden → Thread erstellen
       try {
         await message.startThread({
-          name: `💬 ${message.author.username}`,
+          name: `🗨️ Kommentarthread zu ${message.author.username}s Bild`,
           autoArchiveDuration: 1440, // 24h, dann auto-archiviert
         });
       } catch (err) {
