@@ -3,9 +3,14 @@ import { Client, GatewayIntentBits, Collection } from "discord.js";
 import { loadCommands } from "./src/utils/loadCommands.js";
 import interactionCreateEvent from "./src/events/interactionCreate.js";
 import readyEvent from "./src/events/ready.js";
+import mediaOnlyEvent from "./src/events/mediaOnly.js";
 
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds],
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
+  ],
 });
 
 client.commands = new Collection();
@@ -16,6 +21,7 @@ async function start() {
 
     readyEvent(client);
     interactionCreateEvent(client);
+    mediaOnlyEvent(client);
 
     process.on("unhandledRejection", (err) =>
       console.error("Unhandled rejection:", err)
