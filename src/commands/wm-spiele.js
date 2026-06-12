@@ -1,46 +1,41 @@
 import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
 
-export default {
-    data: new SlashCommandBuilder()
-        .setName('wm-spiele')
-        .setDescription('Zeigt die aktuellen oder anstehenden Spiele der WM 2026.'),
-    async execute(interaction) {
-        await interaction.deferReply();
+export const data = new SlashCommandBuilder()
+    .setName('wm-spiele')
+    .setDescription('Zeigt die aktuellen oder anstehenden Spiele der WM 2026.');
 
-        try {
-            const response = await fetch('https://worldcup26.ir/get/games');
-            if (!response.ok) throw new Error('API nicht erreichbar');
-            
-            const rawData = await response.json();
-            // Fallback, falls die API die Spiele in einem Unterobjekt (z.B. data.games) zurückgibt
-            const matches = Array.isArray(rawData) ? rawData : (rawData.data || rawData.games || []);
+export async function execute(interaction) {
+    await interaction.deferReply();
+    try {
+        const response = await fetch('https://worldcup26.ir/get/games');
+        if (!response.ok) throw new Error('API nicht erreichbar');
+        
+        const rawData = await response.json();
+        const matches = Array.isArray(rawData) ? rawData : (rawData.data || rawData.games || []);
 
-            if (!matches.length) {
-                return interaction.editReply('Aktuell keine Spieldaten verfügbar.');
-            }
-
-            const embed = new EmbedBuilder()
-                .setTitle('🏆 WM 2026 – Spielplan')
-                .setColor('#0F172A');
-
-            // Zeigt der Übersicht halber nur die ersten 5 Matches an (z. B. die aktuellsten)
-            matches.slice(0, 5).forEach(match => {
-                // Berücksichtigt unterschiedliche Namenskonventionen in APIs
-                const homeTeam = match.home_team_en || match.homeTeam?.name || match.home_team || 'Team 1';
-                const awayTeam = match.away_team_en || match.awayTeam?.name || match.away_team || 'Team 2';
-                const status = match.status || 'Geplant';
-                
-                embed.addFields({
-                    name: `${homeTeam} vs. ${awayTeam}`,
-                    value: `**Status:** ${status}\n**Ergebnis:** ${match.home_score || 0} - ${match.away_score || 0}`,
-                    inline: false
-                });
-            });
-
-            await interaction.editReply({ embeds: [embed] });
-        } catch (error) {
-            console.error(error);
-            await interaction.editReply('Fehler beim Abrufen der Spiele von worldcup26.ir.');
+        if (!matches.length) {
+            return interaction.editReply('Aktuell keine Spieldaten verfügbar.');
         }
-    },
-};
+
+        const embed = new EmbedBuilder()
+            .setTitle('🏆 WM 2026 – Spielplan')
+            .setColor('#0F172A');
+
+        matches.slice(0, 5).forEach(match => {
+            const homeTeam = match.home_team_en || match.homeTeam?.name || match.home_team || 'Team 1';
+            const awayTeam = match.away_team_en || match.awayTeam?.name || match.away_team || 'Team 2';
+            const status = match.status || 'Geplant';
+            
+            embed.addFields({
+                name: `${homeTeam} vs. ${awayTeam}`,
+                value: `**Status:** ${status}\n**Ergebnis:** ${match.home_score || 0} - ${match.away_score || 0}`,
+                inline: false
+            });
+        });
+
+        await interaction.editReply({ embeds: [embed] });
+    } catch (error) {
+        console.error(error);
+        await interaction.editReply('Fehler beim Abrufen der Spiele von worldcup26.ir.');
+    }
+}
