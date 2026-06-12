@@ -1,4 +1,3 @@
-// Channel-ID hier eintragen (z.B. aus .env oder direkt als String)
 const MEDIA_ONLY_CHANNEL_ID = process.env.MEDIA_ONLY_CHANNEL_ID;
 
 export default function mediaOnlyEvent(client) {
