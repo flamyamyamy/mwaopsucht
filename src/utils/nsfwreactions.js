@@ -19,10 +19,7 @@ export const nsfwActions = [
     "ero",
 ];
 
-/**
- * Waifu.im NSFW tag map
- * Maps action names → waifu.im tag names
- */
+
 const waifuTagMap = {
     kiss:     "kiss",
     cuddle:   "cuddle",
